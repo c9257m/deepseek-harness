@@ -17,9 +17,11 @@ const PERSIST_KEY = 'dsh.layout.panels'
 beforeEach(() => { localStorage.clear() })
 
 describe('createLayoutStore', () => {
-  it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
+  it('initializes the sidebar at its default width, details closed, wide viewport assumed, out of file mode', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false, fileMode: false,
+    })
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -55,7 +57,9 @@ describe('createLayoutStore', () => {
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: 400, details: 0, narrow: true, narrowExpanded: true, fileMode: false,
+    })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -98,6 +102,23 @@ describe('createLayoutStore', () => {
       details: 0,
       narrow: false,
       narrowExpanded: false,
+      fileMode: false,
+    })
+  })
+
+  it('enterFileMode opens the details track at the default and preserves an open width; exitFileMode restores the plain layout', () => {
+    const { store, actions } = createLayoutStore().create()
+    actions.enterFileMode()
+    expect(store.getSnapshot()).toMatchObject({ fileMode: true, details: DETAILS_DEFAULT })
+    // An already-open track keeps its drag width.
+    actions.exitFileMode()
+    actions.setDetails(500)
+    actions.enterFileMode()
+    expect(store.getSnapshot()).toMatchObject({ fileMode: true, details: 500 })
+    // Exiting closes the right track: the conversation returns to the center.
+    actions.exitFileMode()
+    expect(store.getSnapshot()).toEqual({
+      sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false, fileMode: false,
     })
   })
 })

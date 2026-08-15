@@ -337,6 +337,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the created directory\'s absolute path.',
       },
       {
+        signature: 'readFile(path: string, signal?: AbortSignal): Promise<string>',
+        description: 'Read a regular text file through the Host\'s `browse` capability.',
+        parameters: [{ name: 'path', description: 'absolute file path.' }, { name: 'signal', description: 'aborts the wire request (and the Host\'s read) when the caller supersedes it.' }],
+        returns: 'the decoded text content of the whole file (bounded by the Host\'s byte cap).',
+      },
+      {
+        signature: 'writeFile(path: string, content: string): Promise<void>',
+        description: 'Replace a text file\'s whole content atomically through the Host\'s `browse` capability.',
+        parameters: [{ name: 'path', description: 'absolute file path.' }, { name: 'content', description: 'the complete next file content.' }],
+        returns: 'resolution after the Host\'s atomic replacement.',
+      },
+      {
         signature: 'openPath(path: string): Promise<void>',
         description: 'Open a filesystem path with the Host operating system\'s default application.',
         parameters: [{ name: 'path', description: 'absolute or host-resolvable path.' }],

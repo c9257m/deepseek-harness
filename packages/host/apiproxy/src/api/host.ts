@@ -13,6 +13,8 @@ export interface DirectoryEntry {
   path: string
   /** Hidden by the host platform's convention (dot-prefixed on POSIX); the client owns whether to show it. */
   hidden: boolean
+  /** Row type: 'directory' for enterable directories, 'file' for regular files; crumbs are always 'directory'. */
+  kind: 'directory' | 'file'
 }
 
 /** host.listDirectory response value: one directory level plus its ancestry. */
@@ -26,7 +28,7 @@ export interface DirectoryListing {
    * inclusive; every crumb is a jump target (crumb `hidden` is always false).
    */
   crumbs: DirectoryEntry[]
-  /** Direct child directories, name-sorted; symlinks to directories included. */
+  /** Direct child rows (files and directories), name-sorted; symlinks resolved to their target kind. */
   entries: DirectoryEntry[]
   /** True when the backend cut `entries` at its complete-result bound (the name-sorted tail is absent). */
   truncated: boolean
@@ -81,6 +83,26 @@ export interface HostApi {
    */
   createDirectory(
     request: RpcRequest<{ path: string; name: string }>,
+  ): Promise<RpcResponse<{ path: string }>>
+
+  /**
+   * Read a regular text file, bounded by the backend's byte cap. Only served
+   * under the `browse` capability; failures are `file-unreadable`,
+   * `file-too-large` (the file exceeds the byte cap), and `file-not-text`
+   * (binary content). The carrier's request signal follows the caller,
+   * stopping the backend's read on disconnect or timeout.
+   */
+  readFile(
+    request: RpcRequest<{ path: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<{ content: string }>>
+
+  /**
+   * Replace a text file's whole content atomically. Failures are
+   * `file-write-failed`.
+   */
+  writeFile(
+    request: RpcRequest<{ path: string; content: string }>,
   ): Promise<RpcResponse<{ path: string }>>
 
   /**

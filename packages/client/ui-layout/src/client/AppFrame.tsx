@@ -20,7 +20,7 @@ import css from './AppFrame.module.css'
 /** Full composed props: runtime share + child-slot render share + store share. */
 export type AppFrameProps =
   & PropsRuntime<'root'>
-  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'shell.overlay'>
+  & PropsRenderSlots<'sidebar' | 'conversation' | 'details' | 'workspace.fileViewer' | 'shell.overlay'>
   & PropsStore<ReturnType<typeof createLayoutStore>>
 
 /** Center column grid item (session-body building block). */
@@ -91,6 +91,7 @@ export function AppFrame({
   renderSlot,
 }: AppFrameProps) {
   const panels = useStore(s => s)
+  const fileMode = panels.fileMode
   const detailsSession = useSessions((s) => {
     const current = s.current
     return current !== undefined && s.byId[current]?.blank === false ? current : undefined
@@ -101,11 +102,15 @@ export function AppFrame({
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
     if (detailsSession === undefined) return
+    // In file mode the right track hosts the docked conversation, so a
+    // session switch must not collapse it the way it collapses the
+    // session-scoped tool-details panel.
+    if (fileMode) return
     if (lastSession.current !== undefined && lastSession.current !== detailsSession) {
       actions.closeDetails()
     }
     lastSession.current = detailsSession
-  }, [actions, detailsSession])
+  }, [actions, detailsSession, fileMode])
 
   // Track the frame's own box (not the window): rAF-throttled ResizeObserver.
   useEffect(() => {
@@ -139,7 +144,11 @@ export function AppFrame({
   const sidebarPreference = sidebarCollapsed
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
-  const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  // In file mode the right track hosts the conversation (session-maybe), so
+  // it stays available without a session; otherwise the session-scoped
+  // tool-details panel only opens while a session is current.
+  const detailsPreference = fileMode ? panels.details : (detailsSession === undefined ? 0 : panels.details)
+  const cols = computeColumns(viewport, sidebarPreference, detailsPreference)
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -182,13 +191,26 @@ export function AppFrame({
         })}
       </div>
       <>
-        {/* Both column occupants stay at fixed tree positions from first
-            paint — no loading gate: a bare status line reads worse than
-            the shell's own pending rendering. The conversation
-            is session-maybe; the strict details entry naturally renders
-            empty while no session is current. */}
-        <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
-        <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+        {/* File mode: the center column hosts the workspace file viewer and
+            the conversation docks into the right track (the tool-details
+            panel is hidden for the duration). Plain mode renders the
+            conversation center / tool details right as usual. Both column
+            occupants stay at fixed tree positions from first paint — no
+            loading gate: a bare status line reads worse than the shell's own
+            pending rendering. */}
+        {fileMode
+          ? (
+            <>
+              <CenterColumn>{renderSlot('workspace.fileViewer', {})}</CenterColumn>
+              <DetailsColumn>{renderSlot('conversation', {})}</DetailsColumn>
+            </>
+          )
+          : (
+            <>
+              <CenterColumn>{renderSlot('conversation', {})}</CenterColumn>
+              <DetailsColumn>{renderSlot('details', {})}</DetailsColumn>
+            </>
+          )}
       </>
       <div className={css.overlayLayer} data-shell-overlay>
         {renderSlot('shell.overlay', {})}

@@ -24,7 +24,7 @@ export interface DirectoryPickerNativeCapability {
   pick(signal: AbortSignal): Promise<string | null>
 }
 
-/** One directory row: a listing child or a breadcrumb ancestor. */
+/** One listing row: a breadcrumb ancestor or a child file/directory. */
 export interface DirectoryEntry {
   /** Base name shown in a browser row (a root crumb carries its full path). */
   name: string
@@ -32,6 +32,11 @@ export interface DirectoryEntry {
   path: string
   /** Hidden by the host platform's convention (dot-prefixed on POSIX); the client owns whether to show it. */
   hidden: boolean
+  /**
+   * Row type: 'directory' for enterable directories, 'file' for regular
+   * files. Breadcrumb crumbs are always 'directory'.
+   */
+  kind: 'directory' | 'file'
 }
 
 /** One directory level plus its ancestry, as a browse backend reports it. */
@@ -45,11 +50,11 @@ export interface DirectoryListing {
    * inclusive; every crumb is a jump target (crumb `hidden` is always false).
    */
   crumbs: DirectoryEntry[]
-  /** Direct child directories, name-sorted; symlinks to directories included. */
+  /** Direct child rows (files and directories), name-sorted; symlinks resolved to their target kind. */
   entries: DirectoryEntry[]
   /**
    * True when the backend cut `entries` at its complete-result bound: the
-   * level has more child directories than reported, and the missing rows are
+   * level has more child rows than reported, and the missing rows are
    * the name-sorted tail (hidden rows count toward the bound).
    */
   truncated: boolean
@@ -84,6 +89,26 @@ export interface DirectoryPickerBrowseCapability {
    * `directory-create-failed` for a parent that is not fully qualified or any other failure.
    */
   createDirectory(path: string, name: string): Promise<string>
+  /**
+   * Read a regular text file, bounded to the backend's byte cap.
+   * @param path - absolute file to read.
+   * @param signal - caller lifetime; abort rejects with the abort reason.
+   * @returns the decoded UTF-8 content of the whole file.
+   * @throws {DirectoryPickerError} `file-unreadable` when the path is not
+   * fully qualified or cannot be read as a regular file,
+   * `file-too-large` when the file exceeds the backend's byte cap, and
+   * `file-not-text` when the content is not valid text (binary rejection).
+   */
+  readFile(path: string, signal?: AbortSignal): Promise<string>
+  /**
+   * Replace a text file's whole content atomically (temp sibling + rename).
+   * @param path - absolute file to write.
+   * @param content - the complete next file content.
+   * @returns resolution after the atomic replacement.
+   * @throws {DirectoryPickerError} `file-write-failed` when the path is not
+   * fully qualified or the replacement fails for any filesystem reason.
+   */
+  writeFile(path: string, content: string): Promise<void>
 }
 
 /**
@@ -100,7 +125,9 @@ export interface DirectoryPickerCapabilities {
 export type DirectoryPickerCapability = DirectoryPickerCapabilities[keyof DirectoryPickerCapabilities]
 
 /** Closed failure vocabulary of the browse primitives (mirrored onto the wire by consumers). */
-export type DirectoryPickerErrorCode = 'directory-unreadable' | 'directory-exists' | 'directory-create-failed'
+export type DirectoryPickerErrorCode =
+  | 'directory-unreadable' | 'directory-exists' | 'directory-create-failed'
+  | 'file-unreadable' | 'file-too-large' | 'file-not-text' | 'file-write-failed'
 
 /** Typed failure thrown by browse primitives so consumers can map business codes without string matching. */
 export class DirectoryPickerError extends Error {

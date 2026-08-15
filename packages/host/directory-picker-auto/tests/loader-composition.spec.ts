@@ -20,6 +20,7 @@ import HttpServer from '@deepseek-ai/dsh-host-webserver'
 import type { DirectoryPicker } from '@deepseek-ai/dsh-host-directory-picker'
 import BrowseDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-browse'
 import NativeDirectoryPicker from '@deepseek-ai/dsh-host-directory-picker-native'
+import FileBrowser from '@deepseek-ai/dsh-host-file-browser'
 import * as DirectoryPickerAuto from '../src/index.ts'
 
 const renameControl = vi.hoisted(() => ({
@@ -48,6 +49,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const AUTO = '@deepseek-ai/dsh-host-directory-picker-auto'
 const NATIVE = '@deepseek-ai/dsh-host-directory-picker-native'
 const BROWSE = '@deepseek-ai/dsh-host-directory-picker-browse'
+const FILE_BROWSER = '@deepseek-ai/dsh-host-file-browser'
 const NATIVE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-native'
 const BROWSE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 
@@ -99,6 +101,9 @@ async function loadComposition(
     '  config:',
     `    host: '${bindHost}'`,
     '    port: 0',
+    // The browse backend delegates to the always-mounted file-browser service;
+    // the chooser composition therefore carries both rows.
+    `- name: '${FILE_BROWSER}'`,
     `- name: '${AUTO}'`,
     '',
   ].join('\n'))
@@ -112,6 +117,7 @@ async function loadComposition(
     [AUTO, DirectoryPickerAuto],
     [NATIVE, NativeDirectoryPicker],
     [BROWSE, BrowseDirectoryPicker],
+    [FILE_BROWSER, FileBrowser],
     [NATIVE_SURFACE, surfaceModule(NATIVE_SURFACE)],
     [BROWSE_SURFACE, surfaceModule(BROWSE_SURFACE)],
   ])

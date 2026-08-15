@@ -33,6 +33,7 @@ export const directoryEntrySchema = z.object({
   name: z.string(),
   path: z.string(),
   hidden: z.boolean(),
+  kind: z.enum(['directory', 'file']),
 }) satisfies z.ZodType<Wire<DirectoryEntry>>
 
 /** host.listDirectory request payload; an absent path lists the home directory. */
@@ -63,6 +64,28 @@ export const hostCreateDirectoryRequestSchema = z.object({
 export const hostCreateDirectoryValueSchema = z.object({
   path: z.string(),
 }) satisfies z.ZodType<Wire<ResponseValue<'host.createDirectory'>>>
+
+/** host.readFile request payload: the absolute file path to read. */
+export const hostReadFileRequestSchema = z.object({
+  path: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.readFile'>>>
+
+/** host.readFile response value: the decoded text content. */
+export const hostReadFileValueSchema = z.object({
+  content: z.string(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.readFile'>>>
+
+/** host.writeFile request payload: the absolute file path and the complete next content. */
+export const hostWriteFileRequestSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+}) satisfies z.ZodType<Wire<RequestPayload<'host.writeFile'>>>
+
+/** host.writeFile response value: the written file's absolute path. */
+export const hostWriteFileValueSchema = z.object({
+  path: z.string(),
+}) satisfies z.ZodType<Wire<ResponseValue<'host.writeFile'>>>
+
 /** host.openPath request payload. */
 export const hostOpenPathRequestSchema = z.object({
   path: z.string().min(1),

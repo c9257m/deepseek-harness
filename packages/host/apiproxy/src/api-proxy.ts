@@ -99,6 +99,8 @@ import type {
 } from '@deepseek-ai/dsh-user-questions'
 import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
+// Type-only: pulls the ctx.fileBrowser Context merge (the browse RPCs serve it directly).
+import type {} from '@deepseek-ai/dsh-host-file-browser'
 import {
   ApiRemoteSessionNotFound as SessionNotFound,
   ApiRemoteSubagentSessionOwnership as SubagentSessionOwnership,
@@ -124,7 +126,8 @@ const DEFAULT_MAX_MESSAGES = 50
  * is deferred work.
  */
 const WEB_SETTINGS_NAMESPACES = [
-  'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme', 'web-search-deepseek',
+  'agent-loop', 'shell', 'locale', 'permission', 'ui-conversation', 'ui-theme',
+  'workspace-files', 'web-search-deepseek',
 ] as const
 
 /** Provider work budget: at most 100 calls and 2,000 inspected hits. */
@@ -2967,18 +2970,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async listDirectory(request, signal) {
-        const capability = ctx.directoryPicker.capability()
-        if (capability.kind !== 'browse') {
-          return err(request, {
-            code: 'directory-picker-unavailable',
-            message: `host.listDirectory needs the browse capability; the composed picker serves "${capability.kind}"`,
-            details: { capability: capability.kind },
-          })
-        }
         try {
           // The carrier's signal follows the caller: a disconnect or timeout
-          // stops the backend's directory scan instead of outliving it.
-          return ok(request, await capability.list(request.payload.path, signal))
+          // stops the backend's scan instead of outliving it.
+          return ok(request, await ctx.fileBrowser.list(request.payload.path, signal))
         } catch (error: unknown) {
           // An abort is the caller's own timeout/disconnect, not a server
           // failure — same code pickDirectory and command.execute report.
@@ -2990,16 +2985,32 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async createDirectory(request) {
-        const capability = ctx.directoryPicker.capability()
-        if (capability.kind !== 'browse') {
-          return err(request, {
-            code: 'directory-picker-unavailable',
-            message: `host.createDirectory needs the browse capability; the composed picker serves "${capability.kind}"`,
-            details: { capability: capability.kind },
-          })
-        }
         try {
-          return ok(request, { path: await capability.createDirectory(request.payload.path, request.payload.name) })
+          return ok(request, { path: await ctx.fileBrowser.createDirectory(request.payload.path, request.payload.name) })
+        } catch (error: unknown) {
+          return err(request, directoryError(error))
+        }
+      },
+
+      async readFile(request, signal) {
+        try {
+          // The carrier's signal follows the caller: a disconnect or timeout
+          // stops the backend's read instead of outliving it.
+          return ok(request, { content: await ctx.fileBrowser.readFile(request.payload.path, signal) })
+        } catch (error: unknown) {
+          // An abort is the caller's own timeout/disconnect, not a server
+          // failure — same code pickDirectory and command.execute report.
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'file read was aborted', details: {} })
+          }
+          return err(request, directoryError(error))
+        }
+      },
+
+      async writeFile(request) {
+        try {
+          await ctx.fileBrowser.writeFile(request.payload.path, request.payload.content)
+          return ok(request, { path: request.payload.path })
         } catch (error: unknown) {
           return err(request, directoryError(error))
         }

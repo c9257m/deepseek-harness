@@ -61,6 +61,7 @@ function mountFrame() {
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
+    if (key === 'workspace.fileViewer') return <div data-testid="viewer-content" />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
@@ -281,6 +282,54 @@ describe('AppFrame', () => {
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(1)
     act(() => { instance.actions.toggleSidebar() })
     expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+})
+
+describe('AppFrame — file mode', () => {
+  it('enterFileMode swaps the center occupant to the viewer, docks the conversation right, and opens the track', () => {
+    const { instance, frame, slotCalls, getByTestId } = mountFrame()
+    slotCalls.length = 0 // isolate the file-mode render
+    act(() => { instance.actions.enterFileMode() })
+    expect(tracks(frame)).toEqual([280, 360])
+    expect(getByTestId('viewer-content')).toBeTruthy()
+    const keys = slotCalls.map(c => c.key)
+    expect(keys).toContain('workspace.fileViewer')
+    // The conversation is now the right-track occupant; the tool-details
+    // panel is hidden for the duration.
+    expect(keys.filter(k => k === 'conversation')).toHaveLength(1)
+    expect(keys).not.toContain('details')
+    // The right track stays draggable.
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(2)
+  })
+
+  it('exitFileMode restores conversation-center / details-right and closes the track', () => {
+    const { instance, frame, slotCalls, getByTestId } = mountFrame()
+    act(() => { instance.actions.enterFileMode() })
+    slotCalls.length = 0 // isolate the exit-file-mode render
+    act(() => { instance.actions.exitFileMode() })
+    expect(tracks(frame)).toEqual([280, 0])
+    expect(getByTestId('center-content')).toBeTruthy()
+    expect(getByTestId('details-content')).toBeTruthy()
+    const keys = slotCalls.map(c => c.key)
+    expect(keys).not.toContain('workspace.fileViewer')
+    expect(keys.filter(k => k === 'conversation')).toHaveLength(1)
+    expect(keys).toContain('details')
+  })
+
+  it('file mode keeps the right track open without a current session (the docked chat is session-maybe)', () => {
+    selectedSession.current = undefined
+    const { instance, frame } = mountFrame()
+    act(() => { instance.actions.enterFileMode() })
+    expect(tracks(frame)).toEqual([280, 360])
+    expect(instance.getSnapshot().fileMode).toBe(true)
+  })
+
+  it('a session switch inside file mode does not collapse the docked track', () => {
+    const { instance, frame, rerenderFrame } = mountFrame()
+    act(() => { instance.actions.enterFileMode() })
+    selectedSession.current = 's-next' as SessionId
+    act(() => { rerenderFrame() })
+    expect(tracks(frame)).toEqual([280, 360])
   })
 })
 

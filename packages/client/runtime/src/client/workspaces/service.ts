@@ -47,6 +47,22 @@ export class DirectoryBrowseError extends Error {
   }
 }
 
+/** Structured file-read failure so the file viewer can branch on Host business codes. */
+export class FileReadError extends Error {
+  constructor(readonly rpcError: RpcError) {
+    super(`file read failed: ${rpcError.code}: ${rpcError.message}`)
+    this.name = 'FileReadError'
+  }
+}
+
+/** Structured file-write failure so the file viewer can surface save errors. */
+export class FileWriteError extends Error {
+  constructor(readonly rpcError: RpcError) {
+    super(`file write failed: ${rpcError.code}: ${rpcError.message}`)
+    this.name = 'FileWriteError'
+  }
+}
+
 /** Real Workspace object layer and Host actions. */
 export class WorkspaceRuntime implements IWorkspaces {
   /** UI-facing immutable projection; the manager remains wire truth. */
@@ -236,6 +252,30 @@ export class WorkspaceRuntime implements IWorkspaces {
     const response = await this.api.host.createDirectory({ path, name })
     if (!response.result.ok) throw new DirectoryBrowseError(response.result.error)
     return response.result.value.path
+  }
+
+  /**
+   * Read a regular text file through the Host's `browse` capability.
+   * @param path - absolute file path.
+   * @param signal - aborts the wire request (and the Host's read) when the caller supersedes it.
+   * @returns the decoded text content of the whole file (bounded by the Host's byte cap).
+   */
+  async readFile(path: string, signal?: AbortSignal): Promise<string> {
+    const response = await this.api.host.readFile({ path }, signal)
+    if (!response.result.ok) throw new FileReadError(response.result.error)
+    return response.result.value.content
+  }
+
+  /**
+   * Replace a text file's whole content atomically through the Host's
+   * `browse` capability.
+   * @param path - absolute file path.
+   * @param content - the complete next file content.
+   * @returns resolution after the Host's atomic replacement.
+   */
+  async writeFile(path: string, content: string): Promise<void> {
+    const response = await this.api.host.writeFile({ path, content })
+    if (!response.result.ok) throw new FileWriteError(response.result.error)
   }
 
   /**

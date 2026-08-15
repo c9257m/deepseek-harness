@@ -1,0 +1,66 @@
+/** `workspace-files` namespace dictionaries: file tree and file viewer copy. */
+
+/** Simplified Chinese dictionary (the key-set source of truth). */
+export const zh = {
+  'files.title': '工作区文件',
+  'files.empty.noSession': '打开或新建一个会话后，这里会显示该工作区的文件。',
+  'files.loading': '加载中…',
+  'files.error.loading': '无法加载目录：{message}',
+  'viewer.close': '关闭',
+  'viewer.close.label': '关闭文件',
+  'viewer.tab.close': '关闭 {name}',
+  'viewer.loading': '加载中…',
+  'viewer.empty': '从左侧文件树选择一个文件进行查看。',
+  'viewer.error.tooLarge': '文件过大，无法读取。',
+  'viewer.error.notText': '该文件不是文本文件，无法预览。',
+  'viewer.error.unreadable': '无法读取该文件。',
+  'viewer.error.generic': '读取失败：{message}',
+  'viewer.menu.close': '关闭',
+  'viewer.menu.closeOthers': '关闭其他',
+  'viewer.menu.closeAll': '关闭全部',
+  'viewer.menu.lineNumbers': '显示行号',
+  'viewer.menu.highlight': '语法高亮',
+  'viewer.fontSize': '文件字体大小',
+  'viewer.fontSize.decrease': '减小字体',
+  'viewer.fontSize.increase': '增大字体',
+  'viewer.edit': '编辑',
+  'viewer.edit.done': '完成',
+  'viewer.edit.unavailable': '该文件无法编辑',
+  'viewer.save.error': '保存失败：{message}',
+  'viewer.save.retry': '重试',
+  'viewer.unsaved': '有未保存的修改',
+} satisfies Record<string, string>
+
+/** The workspace-files namespace key union. */
+export type WorkspaceFilesKey = keyof typeof zh
+
+/** English dictionary, checked complete against the zh key set. */
+export const en = {
+  'files.title': 'Workspace Files',
+  'files.empty.noSession': 'Open or start a session to see this workspace\'s files.',
+  'files.loading': 'Loading…',
+  'files.error.loading': 'Cannot load directory: {message}',
+  'viewer.close': 'Close',
+  'viewer.close.label': 'Close file',
+  'viewer.tab.close': 'Close {name}',
+  'viewer.loading': 'Loading…',
+  'viewer.empty': 'Select a file from the tree to preview it.',
+  'viewer.error.tooLarge': 'The file is too large to read.',
+  'viewer.error.notText': 'This file is not a text file and cannot be previewed.',
+  'viewer.error.unreadable': 'Cannot read this file.',
+  'viewer.error.generic': 'Read failed: {message}',
+  'viewer.menu.close': 'Close',
+  'viewer.menu.closeOthers': 'Close Others',
+  'viewer.menu.closeAll': 'Close All',
+  'viewer.menu.lineNumbers': 'Show Line Numbers',
+  'viewer.menu.highlight': 'Syntax Highlighting',
+  'viewer.fontSize': 'File Font Size',
+  'viewer.fontSize.decrease': 'Decrease font size',
+  'viewer.fontSize.increase': 'Increase font size',
+  'viewer.edit': 'Edit',
+  'viewer.edit.done': 'Done',
+  'viewer.edit.unavailable': 'This file cannot be edited',
+  'viewer.save.error': 'Save failed: {message}',
+  'viewer.save.retry': 'Retry',
+  'viewer.unsaved': 'Unsaved changes',
+} satisfies Record<WorkspaceFilesKey, string>

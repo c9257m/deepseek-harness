@@ -1,0 +1,53 @@
+/* File-font-size preference row: label left, bounded stepper right. */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-size: 14px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  padding: 0;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.step:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.value {
+  min-width: 44px;
+  text-align: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+}

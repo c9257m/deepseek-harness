@@ -54,6 +54,21 @@ export interface IWorkspaces {
    */
   createDirectory(path: string, name: string): Promise<string>
   /**
+   * Read a regular text file through the Host's `browse` capability.
+   * @param path - absolute file path.
+   * @param signal - aborts the wire request (and the Host's read) when the caller supersedes it.
+   * @returns the decoded text content of the whole file (bounded by the Host's byte cap).
+   */
+  readFile(path: string, signal?: AbortSignal): Promise<string>
+  /**
+   * Replace a text file's whole content atomically through the Host's
+   * `browse` capability.
+   * @param path - absolute file path.
+   * @param content - the complete next file content.
+   * @returns resolution after the Host's atomic replacement.
+   */
+  writeFile(path: string, content: string): Promise<void>
+  /**
    * Open a filesystem path with the Host operating system's default application.
    * @param path - absolute or host-resolvable path.
    */

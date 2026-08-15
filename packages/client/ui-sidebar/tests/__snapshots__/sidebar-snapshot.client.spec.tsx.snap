@@ -145,6 +145,28 @@ exports[`sidebar shell snapshots > renders the expanded column (wordmark, capsul
       </span>
     </button>
     <div
+      aria-label="Browse view"
+      class="viewTabs"
+      role="tablist"
+    >
+      <button
+        aria-selected="true"
+        class="viewTab viewTabActive"
+        role="tab"
+        type="button"
+      >
+        Sessions
+      </button>
+      <button
+        aria-selected="false"
+        class="viewTab"
+        role="tab"
+        type="button"
+      >
+        Files
+      </button>
+    </div>
+    <div
       class="regionArea"
     >
       <div
@@ -237,6 +259,28 @@ exports[`sidebar shell snapshots > renders the expanded column in the default lo
         新会话
       </span>
     </button>
+    <div
+      aria-label="浏览视图"
+      class="viewTabs"
+      role="tablist"
+    >
+      <button
+        aria-selected="true"
+        class="viewTab viewTabActive"
+        role="tab"
+        type="button"
+      >
+        会话
+      </button>
+      <button
+        aria-selected="false"
+        class="viewTab"
+        role="tab"
+        type="button"
+      >
+        文件
+      </button>
+    </div>
     <div
       class="regionArea"
     >

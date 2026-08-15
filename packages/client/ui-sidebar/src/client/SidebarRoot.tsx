@@ -59,6 +59,12 @@ export function SidebarRoot({
   }, [collapsed])
   const wide = !collapsed || !settled
 
+  // The browse view the region area shows: the session/workspace browser or
+  // the workspace file tree. Shell-local presentation state — the two region
+  // slots never mount at the same time, and each keeps its own state across
+  // the switch.
+  const [view, setView] = useState<'workspaces' | 'files'>('workspaces')
+
   // Freeze the content at its expanded width while it fades out (collapsed
   // && wide): the sliding column then clips it instead of reflowing it. The
   // rail layout (.collapsed styles) only applies once the fade settles.
@@ -170,12 +176,41 @@ export function SidebarRoot({
       </Tooltip>
 
       {/* The browsing region fills the column between the controls and the
-          foot in both states; its rail icon column rides the same slot. */}
+          foot in both states; its rail icon column rides the same slot. The
+          wide view tabs switch between the session browser and the workspace
+          file tree; the rail hides the tabs (each region owns its rail icons). */}
+      {wide && (
+        <div className={css.viewTabs} role="tablist" aria-label={t('view.tabs.label')}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'workspaces'}
+            className={clsx(css.viewTab, view === 'workspaces' && css.viewTabActive)}
+            onClick={() => { setView('workspaces') }}
+          >
+            {t('view.sessions')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'files'}
+            className={clsx(css.viewTab, view === 'files' && css.viewTabActive)}
+            onClick={() => { setView('files') }}
+          >
+            {t('view.files')}
+          </button>
+        </div>
+      )}
       <div className={css.regionArea}>
-        {renderSlot('sidebar.workspaces', {
-          wide,
-          expandSidebar: () => { if (collapsed) toggleSidebar() },
-        })}
+        {view === 'files'
+          ? renderSlot('sidebar.files', {
+            wide,
+            expandSidebar: () => { if (collapsed) toggleSidebar() },
+          })
+          : renderSlot('sidebar.workspaces', {
+            wide,
+            expandSidebar: () => { if (collapsed) toggleSidebar() },
+          })}
       </div>
 
       {/* Footer actions stack above Settings in both sidebar widths. */}

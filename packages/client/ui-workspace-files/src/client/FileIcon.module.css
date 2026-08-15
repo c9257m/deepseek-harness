@@ -1,0 +1,42 @@
+/* Per-type file badge: rounded tile, per-group color from the static palette
+   tokens (theme sheets), centered glyph. Long labels (C++, TOML) shrink via
+   the inline font-size the component sets; the tile clips with ellipsis as a
+   last resort. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.blue {
+  background: var(--dsw-static-blue-100);
+  color: var(--dsw-static-blue-600);
+}
+
+.amber {
+  background: var(--dsw-static-amber-100);
+  color: var(--dsw-static-amber-600);
+}
+
+.green {
+  background: var(--dsw-static-green-100);
+  color: var(--dsw-static-green-500);
+}
+
+.red {
+  background: var(--dsw-static-red-100);
+  color: var(--dsw-static-red-600);
+}
+
+.neutral {
+  background: var(--dsw-static-neutral-bluish-150);
+  color: var(--dsw-static-neutral-bluish-600);
+}

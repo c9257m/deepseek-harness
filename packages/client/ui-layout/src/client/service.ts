@@ -27,6 +27,17 @@ export interface ILayout {
   openDetails(): void
   /** Close the details panel. */
   closeDetails(): void
+  /**
+   * Enter file mode: the center column shows the workspace file viewer and
+   * the conversation docks into the right track (opened at the contract
+   * default width when closed). No-op while already in file mode.
+   */
+  openFileMode(): void
+  /**
+   * Exit file mode: the conversation returns to the center column and the
+   * right track closes. No-op while already out of file mode.
+   */
+  closeFileMode(): void
 }
 
 /** Cross-plugin panel-action face (ctx.layout). */
@@ -57,6 +68,16 @@ export class LayoutController implements ILayout {
   /** Close the details panel. */
   closeDetails(): void {
     this.#require().closeDetails()
+  }
+
+  /** Enter file mode: the conversation docks into the right track (see {@link ILayout.openFileMode}). */
+  openFileMode(): void {
+    this.#require().enterFileMode()
+  }
+
+  /** Exit file mode: the conversation returns to the center (see {@link ILayout.closeFileMode}). */
+  closeFileMode(): void {
+    this.#require().exitFileMode()
   }
 
   #require(): PanelActions {

@@ -19,8 +19,17 @@ import {
  * (viewport < SIDEBAR_AUTO_COLLAPSE) so toggleSidebar can pick semantics, and
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
+ * `fileMode` is the workspace-file layout mode: while a file is open in the
+ * viewer, the center column hosts the viewer and the conversation docks into
+ * the right track (the same track the tool-details panel uses otherwise).
  */
-type LayoutState = { sidebar: number; details: number; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = {
+  sidebar: number
+  details: number
+  narrow: boolean
+  narrowExpanded: boolean
+  fileMode: boolean
+}
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -33,6 +42,8 @@ type LayoutActions = {
   setNarrow: (draft: LayoutState, narrow: boolean) => void
   openDetails: (draft: LayoutState) => void
   closeDetails: (draft: LayoutState) => void
+  enterFileMode: (draft: LayoutState) => void
+  exitFileMode: (draft: LayoutState) => void
 }
 
 /**
@@ -42,12 +53,17 @@ type LayoutActions = {
  * into the panel's contract range and never cross the open/closed line;
  * open/close transitions write 0 / the default explicitly. Below the
  * auto-collapse breakpoint (AppFrame feeds setNarrow) the sidebar toggle
- * flips the narrowExpanded override instead of the preference.
+ * flips the narrowExpanded override instead of the preference. Entering file
+ * mode docks the conversation into the right track and opens it at the
+ * contract default when closed; exiting restores the plain layout (chat back
+ * in the center, right track closed).
  * @returns the store handle (spec + type + identity + factory in one).
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({
+      sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false, fileMode: false,
+    }),
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
@@ -66,6 +82,14 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
       },
       openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
       closeDetails: (d) => { d.details = 0 },
+      enterFileMode: (d) => {
+        d.fileMode = true
+        if (d.details === 0) d.details = DETAILS_DEFAULT
+      },
+      exitFileMode: (d) => {
+        d.fileMode = false
+        d.details = 0
+      },
     },
   })
   return handle

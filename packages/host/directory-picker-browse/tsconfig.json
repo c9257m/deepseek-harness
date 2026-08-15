@@ -15,6 +15,9 @@
       "path": "../directory-picker"
     },
     {
+      "path": "../file-browser"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     }
   ]

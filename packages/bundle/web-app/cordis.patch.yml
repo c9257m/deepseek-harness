@@ -90,6 +90,12 @@
     - id: directory-picker
       name: '@deepseek-ai/dsh-host-directory-picker-auto'
 
+    # GUI filesystem browsing (file tree + viewer): always mounted, independent
+    # of how directory picking is served. The browse picker backend delegates
+    # its capability to this service.
+    - id: file-browser
+      name: '@deepseek-ai/dsh-host-file-browser'
+
     # Read-only projection of current Loader entries for trusted client RPCs.
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
@@ -218,6 +224,12 @@
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    # Workspace file browser: the sidebar file tree (sidebar.files) and the
+    # center file viewer (workspace.fileViewer); opening a file docks the
+    # conversation into the right track.
+    - id: ui-workspace-files
+      name: '@deepseek-ai/dsh-client-ui-workspace-files'
 
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the two reference sources (ui-skill / ui-subagent).

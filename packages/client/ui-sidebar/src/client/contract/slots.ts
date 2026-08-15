@@ -19,9 +19,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
      * package's 'sidebar' entry (declaring is claiming); ui-workspace
-     * registers the browser.
+     * registers the browser. Rendered when the shell's browse view is
+     * "sessions".
      */
     'sidebar.workspaces': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
+    /**
+     * The workspace file-tree region: the current workspace's file hierarchy
+     * as a lazy tree. Declared by this package's 'sidebar' entry; the
+     * workspace-file browser package registers the tree. Rendered when the
+     * shell's browse view is "files".
+     */
+    'sidebar.files': { kind: 'single'; scope: 'root'; owner: SidebarSectionOwnerProps }
     /**
      * The settings seat at the sidebar foot. Declared by this package's
      * 'sidebar' entry; ui-settings registers its trigger row + modal panel.
@@ -85,5 +93,5 @@ export type SidebarRootInjected = {
  */
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
-  & PropsRenderSlots<'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
+  & PropsRenderSlots<'sidebar.workspaces' | 'sidebar.files' | 'sidebar.settings' | 'sidebar.footer.action'>
   & SidebarRootInjected & PropsLocale<'sidebar'>

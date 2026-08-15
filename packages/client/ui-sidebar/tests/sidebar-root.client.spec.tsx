@@ -27,6 +27,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
+  let regionKey: string | undefined
   let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
@@ -45,6 +46,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
         }
+        regionKey = key
         regionOwner = owner as SidebarSectionOwnerProps
         return <div data-testid="region" data-wide={owner.wide} />
       }) as SidebarRootComponentProps['renderSlot']}
@@ -54,6 +56,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   return {
     startSession,
     toggleSidebar,
+    regionKey: () => regionKey,
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
@@ -115,5 +118,22 @@ describe('SidebarRoot shell', () => {
     const b = mountShell({ collapsed: true })
     expect(b.regionOwner().wide).toBe(false)
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
+  })
+
+  it('switches the browse view between the sessions and files tabs, remounting the region slot', () => {
+    const b = mountShell()
+    // The sessions browser is the default region occupant.
+    expect(b.regionKey()).toBe('sidebar.workspaces')
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }))
+    expect(b.regionKey()).toBe('sidebar.files')
+    expect(b.regionOwner().wide).toBe(true)
+    fireEvent.click(screen.getByRole('tab', { name: 'Sessions' }))
+    expect(b.regionKey()).toBe('sidebar.workspaces')
+  })
+
+  it('hides the view tabs in the collapsed rail', () => {
+    const b = mountShell({ collapsed: true })
+    expect(screen.queryByRole('tab', { name: 'Files' })).toBeNull()
+    expect(b.regionKey()).toBe('sidebar.workspaces')
   })
 })

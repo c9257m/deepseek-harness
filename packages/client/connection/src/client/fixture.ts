@@ -1568,6 +1568,8 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   // deterministic content mirroring the design mock so assembled Web tests
   // and snapshots can walk it. Leaves are materialized lazily: a child listed
   // by its parent lists as empty until something is created inside it.
+  // `fileNames` marks the absolute paths that are regular files rather than
+  // directories, so the same tree serves the workspace file browser too.
   const FIXTURE_HOME = '/home/fixture'
   const directoryTree = new Map<string, string[]>([
     ['/', ['home']],
@@ -1577,6 +1579,18 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       'project', 'deepseek-iOS', 'deepseek-android', 'deepseek-platform',
       'deepseek-web', 'deepseek-harness', 'deepseek-app', 'deepseek-landing-blog',
     ]],
+    [`${FIXTURE_HOME}/Documents/project`, ['README.md', 'src', 'package.json']],
+    [`${FIXTURE_HOME}/Documents/project/src`, ['main.ts']],
+  ])
+  const fileNames = new Set<string>([
+    `${FIXTURE_HOME}/Documents/project/README.md`,
+    `${FIXTURE_HOME}/Documents/project/package.json`,
+    `${FIXTURE_HOME}/Documents/project/src/main.ts`,
+  ])
+  const FILE_CONTENTS = new Map<string, string>([
+    [`${FIXTURE_HOME}/Documents/project/README.md`, '# fixture project\n\nDeterministic workspace content for assembled Web tests.\n'],
+    [`${FIXTURE_HOME}/Documents/project/package.json`, '{ "name": "fixture-project", "private": true }\n'],
+    [`${FIXTURE_HOME}/Documents/project/src/main.ts`, 'export const answer = 42\n'],
   ])
   const childrenOf = (path: string): string[] | undefined => {
     const known = directoryTree.get(path)
@@ -1585,12 +1599,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     const name = path.slice(path.lastIndexOf('/') + 1)
     return directoryTree.get(parent)?.includes(name) === true ? [] : undefined
   }
-  const crumbsOf = (path: string): { name: string; path: string; hidden: boolean }[] => {
-    const crumbs = [{ name: '/', path: '/', hidden: false }]
+  const crumbsOf = (path: string): { name: string; path: string; hidden: boolean; kind: 'directory' }[] => {
+    const crumbs = [{ name: '/', path: '/', hidden: false, kind: 'directory' as const }]
     let acc = ''
     for (const segment of path.split('/').filter(Boolean)) {
       acc += `/${segment}`
-      crumbs.push({ name: segment, path: acc, hidden: false })
+      crumbs.push({ name: segment, path: acc, hidden: false, kind: 'directory' as const })
     }
     return crumbs
   }
@@ -2540,10 +2554,35 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           home: FIXTURE_HOME,
           crumbs: crumbsOf(target),
           entries: [...children].sort((a, b) => a.localeCompare(b))
-            .map(name => ({ name, path: target === '/' ? `/${name}` : `${target}/${name}`, hidden: name.startsWith('.') })),
+            .map((name) => {
+              const path = target === '/' ? `/${name}` : `${target}/${name}`
+              return {
+                name,
+                path,
+                hidden: name.startsWith('.'),
+                kind: fileNames.has(path) ? 'file' as const : 'directory' as const,
+              }
+            }),
           // The fixture tree is tiny; no level ever reaches a backend bound.
           truncated: false,
         })
+      },
+      readFile: (request) => {
+        const target = request.payload.path
+        const content = FILE_CONTENTS.get(target)
+        if (content === undefined) {
+          return err(request, { code: 'file-unreadable', message: `cannot read ${target}: not a fixture file`, details: { path: target } })
+        }
+        return ok(request, { content })
+      },
+      writeFile: (request) => {
+        const { path, content } = request.payload
+        if (!fileNames.has(path) && !FILE_CONTENTS.has(path)) {
+          return err(request, { code: 'file-write-failed', message: `cannot write ${path}: not a fixture file`, details: { path } })
+        }
+        FILE_CONTENTS.set(path, content)
+        fileNames.add(path)
+        return ok(request, { path })
       },
       createDirectory: (request) => {
         const parent = request.payload.path
@@ -3097,6 +3136,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.pickDirectory': return this.api.host.pickDirectory(request, new AbortController().signal)
       case 'host.listDirectory': return this.api.host.listDirectory(request, new AbortController().signal)
       case 'host.createDirectory': return this.api.host.createDirectory(request)
+      case 'host.readFile': return this.api.host.readFile(request, new AbortController().signal)
+      case 'host.writeFile': return this.api.host.writeFile(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'workspace.list': return this.api.workspace.list(request)
       case 'workspace.create': return this.api.workspace.create(request)

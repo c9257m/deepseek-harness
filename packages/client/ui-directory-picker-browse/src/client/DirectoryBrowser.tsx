@@ -105,7 +105,7 @@ function displayCrumbs(listing: DirectoryListing, homeLabel: string): DirectoryE
   const homeIndex = listing.crumbs.findIndex(crumb => crumb.path === listing.home)
   if (homeIndex === -1) return listing.crumbs
   const tail = listing.crumbs.slice(homeIndex + 1)
-  return [{ name: homeLabel, path: listing.home, hidden: false }, ...tail]
+  return [{ name: homeLabel, path: listing.home, hidden: false, kind: 'directory' }, ...tail]
 }
 
 /**
@@ -194,12 +194,15 @@ function visibleEntries(
   filterPrefix: string | null,
 ): readonly DirectoryEntry[] {
   const needle = filterPrefix === null ? '' : filterPrefix.toLowerCase()
+  // A directory picker shows directories only: the browse listing now carries
+  // file rows for the workspace file tree, and this dialog filters them out.
+  const directories = entries.filter(entry => entry.kind === 'directory')
   // A dot-led prefix names hidden entries explicitly, so matching ones
   // surface even while the toggle keeps the rest hidden.
   const displayable = (entry: DirectoryEntry): boolean => showHidden || !entry.hidden || needle.startsWith('.')
   const matches = (entry: DirectoryEntry): boolean => displayable(entry) && entry.name.toLowerCase().startsWith(needle)
-  const narrowing = needle !== '' && entries.some(matches)
-  return entries.filter((entry) => {
+  const narrowing = needle !== '' && directories.some(matches)
+  return directories.filter((entry) => {
     if (entry.path === selectedPath) return true
     if (narrowing) return matches(entry)
     return showHidden || !entry.hidden
@@ -624,7 +627,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
         if (seq !== requestSeq.current) return
         setParent(level)
         setLoading(false)
-        select({ name, path: createdPath, hidden: false })
+        select({ name, path: createdPath, hidden: false, kind: 'directory' })
       }, (reason: unknown) => {
         /* v8 ignore next -- same fence as navigate/select; the modal blocks superseding input */
         if (seq !== requestSeq.current) return

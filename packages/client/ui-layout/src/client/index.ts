@@ -68,8 +68,21 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      *
      * No owner props: the framework injects the session id and hooks for the
      * `session` scope, and `ctx.layout` owns whether the column is open.
+     * In file mode (a workspace file open) the frame renders the
+     * `conversation` slot here instead, docking the chat into the right track.
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
+    /**
+     * The center column's occupant in file mode, when a workspace file is
+     * open: the conversation docks into the right track and this viewer
+     * takes the center. Not rendered (and its occupant unmounted) while file
+     * mode is off. OCCUPIED by the workspace-file browser package's viewer —
+     * registering here replaces the file-viewer surface outright.
+     *
+     * No owner props: the open-file state arrives through the registrant's
+     * own store, and `ctx.layout` owns whether file mode is active.
+     */
+    'workspace.fileViewer': { kind: 'single'; scope: 'root'; owner: FileViewerOwnerProps }
     /**
      * Frame-wide floating layer, above every column and outside their scroll
      * containers. Deliberately generic and unowned by any feature: a badge, a
@@ -104,6 +117,9 @@ export interface ConvOwnerProps {}
 /** Details owner share: empty — sessionId arrives as a framework-standard prop. */
 export interface DetailsOwnerProps {}
 
+/** File-viewer owner share: empty — open-file state lives in the registrant's store. */
+export interface FileViewerOwnerProps {}
+
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme']
 
@@ -123,6 +139,7 @@ export function apply(ctx: ClientContext): void {
         'sidebar': { kind: 'single', scope: 'root' },
         'conversation': { kind: 'single', scope: 'session-maybe' },
         'details': { kind: 'single', scope: 'session' },
+        'workspace.fileViewer': { kind: 'single', scope: 'root' },
         'shell.overlay': { kind: 'list', scope: 'root' },
       },
       // Exclusive store: the factory itself — the framework instantiates per

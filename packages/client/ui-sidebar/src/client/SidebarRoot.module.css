@@ -241,6 +241,47 @@
   padding-left: 0;
 }
 
+/* Browse-view tabs: the sessions/files switch above the region seat. Two
+   equal segmented buttons in the section-header fill color; the active tab
+   carries the primary-soft pill so the switch reads as one control. */
+.viewTabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin: 0 0 8px;
+  border-radius: 8px;
+  background: var(--dsw-specific-sidebar-fill);
+  box-sizing: border-box;
+}
+
+.viewTab {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 28px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.viewTab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.viewTabActive,
+.viewTabActive:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
 /* Footer seats: additive actions stack above Settings. Each occupant owns its
    button geometry and hover chrome. */
 .footArea {

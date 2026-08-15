@@ -16,11 +16,13 @@ function fakePanels(): PanelActions {
     setNarrow: vi.fn(),
     openDetails: vi.fn(),
     closeDetails: vi.fn(),
+    enterFileMode: vi.fn(),
+    exitFileMode: vi.fn(),
   }
 }
 
 describe('LayoutController', () => {
-  it('forwards the three panel actions to the attached set', () => {
+  it('forwards the five panel actions to the attached set', () => {
     const service = new LayoutController()
     const panels = fakePanels()
     service.attachPanels(panels)
@@ -28,10 +30,14 @@ describe('LayoutController', () => {
     service.toggleSidebar()
     service.openDetails()
     service.closeDetails()
+    service.openFileMode()
+    service.closeFileMode()
 
     expect(panels.toggleSidebar).toHaveBeenCalledTimes(1)
     expect(panels.openDetails).toHaveBeenCalledTimes(1)
     expect(panels.closeDetails).toHaveBeenCalledTimes(1)
+    expect(panels.enterFileMode).toHaveBeenCalledTimes(1)
+    expect(panels.exitFileMode).toHaveBeenCalledTimes(1)
     expect(panels.setSidebar).not.toHaveBeenCalled()
     expect(panels.setDetails).not.toHaveBeenCalled()
   })
@@ -41,6 +47,8 @@ describe('LayoutController', () => {
     expect(() => { service.toggleSidebar() }).toThrow(/panel actions not wired/)
     expect(() => { service.openDetails() }).toThrow(/panel actions not wired/)
     expect(() => { service.closeDetails() }).toThrow(/panel actions not wired/)
+    expect(() => { service.openFileMode() }).toThrow(/panel actions not wired/)
+    expect(() => { service.closeFileMode() }).toThrow(/panel actions not wired/)
   })
 
   it('re-attach overwrites the stale action set (entry re-register)', () => {

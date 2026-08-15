@@ -128,9 +128,9 @@ export class TestWorkspaces implements IWorkspaces {
       path: '/home/test',
       home: '/home/test',
       crumbs: [
-        { name: '/', path: '/', hidden: false },
-        { name: 'home', path: '/home', hidden: false },
-        { name: 'test', path: '/home/test', hidden: false },
+        { name: '/', path: '/', hidden: false, kind: 'directory' as const },
+        { name: 'home', path: '/home', hidden: false, kind: 'directory' as const },
+        { name: 'test', path: '/home/test', hidden: false, kind: 'directory' as const },
       ],
       entries: [],
       truncated: false,
@@ -148,6 +148,29 @@ export class TestWorkspaces implements IWorkspaces {
     const stub = this.stubs.get('createDirectory')
     if (stub !== undefined) return await (stub(path, name) as Promise<string>)
     return `${path}/${name}`
+  }
+
+  /**
+   * Browse text-file read (recorded). The default serves empty content.
+   * @param path - absolute file path.
+   * @returns the decoded text content.
+   */
+  async readFile(path: string, signal?: AbortSignal): Promise<string> {
+    this.calls.push({ method: 'readFile', args: [path, signal] })
+    const stub = this.stubs.get('readFile')
+    if (stub !== undefined) return await (stub(path, signal) as Promise<string>)
+    return ''
+  }
+
+  /**
+   * Browse text-file write (recorded). The default resolves.
+   * @param path - absolute file path.
+   * @param content - the complete next file content.
+   */
+  async writeFile(path: string, content: string): Promise<void> {
+    this.calls.push({ method: 'writeFile', args: [path, content] })
+    const stub = this.stubs.get('writeFile')
+    if (stub !== undefined) await (stub(path, content) as Promise<void> | void)
   }
 
   /**

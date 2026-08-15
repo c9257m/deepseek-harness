@@ -64,6 +64,7 @@ async function harness(
   extras: {
     openPath?: (path: string, signal: AbortSignal) => Promise<void>
     canOpenPath?: () => boolean
+    fileBrowser?: { list?: unknown; createDirectory?: unknown; readFile?: unknown }
   } = {},
 ) {
   const ctx = new Context()
@@ -102,6 +103,9 @@ async function harness(
   // Structural picker fake: the gateway only reads capability(); a stable
   // object per harness mirrors the seam's stability contract.
   ctx.provide('directoryPicker', { capability: () => picker } as never)
+  // Structural file-browser fake: the listing/read RPCs serve ctx.fileBrowser
+  // directly, independent of the picker capability.
+  ctx.provide('fileBrowser', extras.fileBrowser ?? FILE_BROWSER_STUB as never)
   const api = createApiProxy(ctx, {
     defaultModelSelection: () => ({ provider: 'test', model: 'test-model' }),
     cwd: root,
@@ -149,7 +153,13 @@ describe('host.pickDirectory', () => {
   })
 
   it('refuses the native RPC under a browse composition', async () => {
-    const { api } = await harness(undefined, BROWSE_STUB)
+    const { api } = await harness(undefined, {
+      kind: 'browse',
+      list: async () => ({ path: '/', home: '/', crumbs: [], entries: [], truncated: false }),
+      createDirectory: async () => '/never',
+      readFile: async () => '',
+      writeFile: async () => {},
+    })
     const response = await api.host.pickDirectory(request({}), new AbortController().signal)
     expect(response.result).toMatchObject({
       ok: false,
@@ -158,30 +168,40 @@ describe('host.pickDirectory', () => {
   })
 })
 
-/** Canned browse capability: one listing, one created path, typed failures on demand. */
-const BROWSE_STUB: DirectoryPickerCapability = {
-  kind: 'browse',
-  list: async (path) => {
+/** Canned file-browser service: one listing, one created path, one read, typed failures on demand. */
+const FILE_BROWSER_STUB = {
+  list: async (path?: string) => {
     if (path === '/denied') throw new DirectoryPickerError('directory-unreadable', '/denied', 'cannot list /denied')
     const target = path ?? '/home/user'
     return {
       path: target,
       home: '/home/user',
-      crumbs: [{ name: '/', path: '/', hidden: false }],
-      entries: [{ name: 'projects', path: `${target}/projects`, hidden: false }],
+      crumbs: [{ name: '/', path: '/', hidden: false, kind: 'directory' }],
+      entries: [{ name: 'projects', path: `${target}/projects`, hidden: false, kind: 'directory' }],
       truncated: false,
     }
   },
-  createDirectory: async (path, name) => {
+  createDirectory: async (path: string, name: string) => {
     if (name === 'taken') throw new DirectoryPickerError('directory-exists', `${path}/${name}`, 'already exists')
     if (name === 'unwritable') throw new Error('disk detached')
     return `${path}/${name}`
   },
+  readFile: async (path: string) => {
+    if (path === '/big') throw new DirectoryPickerError('file-too-large', '/big', 'too large')
+    if (path === '/binary') throw new DirectoryPickerError('file-not-text', '/binary', 'binary content')
+    if (path === '/missing') throw new DirectoryPickerError('file-unreadable', '/missing', 'missing')
+    if (path === '/boom') throw new Error('disk detached')
+    return 'hello world'
+  },
+  writeFile: async (path: string) => {
+    if (path === '/readonly') throw new DirectoryPickerError('file-write-failed', '/readonly', 'read-only target')
+    if (path === '/detached') throw new Error('disk detached')
+  },
 }
 
 describe('host.listDirectory / host.createDirectory', () => {
-  it('serves listings and creation through the browse capability, defaulting to home', async () => {
-    const { api } = await harness(undefined, BROWSE_STUB)
+  it('serves listings and creation through the file-browser service, defaulting to home', async () => {
+    const { api } = await harness()
     const home = await api.host.listDirectory(request({}), new AbortController().signal)
     expect(home.result).toMatchObject({ ok: true, value: { path: '/home/user', home: '/home/user' } })
     const listed = await api.host.listDirectory(request({ path: '/home/user/projects' }), new AbortController().signal)
@@ -190,8 +210,8 @@ describe('host.listDirectory / host.createDirectory', () => {
     expect(created.result).toEqual({ ok: true, value: { path: '/home/user/fresh' } })
   })
 
-  it('maps typed picker failures onto the wire error codes and folds unknown throws to internal', async () => {
-    const { api } = await harness(undefined, BROWSE_STUB)
+  it('maps typed file-browser failures onto the wire error codes and folds unknown throws to internal', async () => {
+    const { api } = await harness()
     expect((await api.host.listDirectory(request({ path: '/denied' }), new AbortController().signal)).result).toMatchObject({
       ok: false, error: { code: 'directory-unreadable', details: { path: '/denied' } },
     })
@@ -204,12 +224,12 @@ describe('host.listDirectory / host.createDirectory', () => {
   })
 
   it('reports an aborted listing as cancelled, like the other signal-following RPCs', async () => {
-    const { api } = await harness(undefined, {
-      kind: 'browse',
-      list: (_path, signal) => new Promise((_resolve, reject) => {
-        signal?.addEventListener('abort', () => { reject(new Error('scan aborted')) }, { once: true })
-      }),
-      createDirectory: async () => '/never',
+    const { api } = await harness(undefined, undefined, {
+      fileBrowser: {
+        list: (_path: string | undefined, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => { reject(new Error('scan aborted')) }, { once: true })
+        }),
+      },
     })
     const abort = new AbortController()
     const pending = api.host.listDirectory(request({}), abort.signal)
@@ -217,14 +237,71 @@ describe('host.listDirectory / host.createDirectory', () => {
     expect((await pending).result).toMatchObject({ ok: false, error: { code: 'cancelled' } })
   })
 
-  it('refuses the browse RPCs under a native composition', async () => {
+  it('serves the browse RPCs under a native composition (file browsing is not picker-gated)', async () => {
     const { api } = await harness()
     expect((await api.host.listDirectory(request({}), new AbortController().signal)).result).toMatchObject({
-      ok: false, error: { code: 'directory-picker-unavailable', details: { capability: 'native' } },
+      ok: true, value: { path: '/home/user' },
     })
-    expect((await api.host.createDirectory(request({ path: '/x', name: 'y' }))).result).toMatchObject({
-      ok: false, error: { code: 'directory-picker-unavailable', details: { capability: 'native' } },
+    expect((await api.host.createDirectory(request({ path: '/x', name: 'y' }))).result).toEqual({
+      ok: true, value: { path: '/x/y' },
     })
+  })
+})
+
+describe('host.readFile', () => {
+  it('serves text reads through the file-browser service', async () => {
+    const { api } = await harness()
+    const read = await api.host.readFile(request({ path: '/home/user/README.md' }), new AbortController().signal)
+    expect(read.result).toEqual({ ok: true, value: { content: 'hello world' } })
+  })
+
+  it('maps typed read failures onto the wire error codes and folds unknown throws to internal', async () => {
+    const { api } = await harness()
+    expect((await api.host.readFile(request({ path: '/big' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'file-too-large', details: { path: '/big' } } })
+    expect((await api.host.readFile(request({ path: '/binary' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'file-not-text', details: { path: '/binary' } } })
+    expect((await api.host.readFile(request({ path: '/missing' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'file-unreadable', details: { path: '/missing' } } })
+    expect((await api.host.readFile(request({ path: '/boom' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'internal' } })
+  })
+
+  it('reports an aborted read as cancelled, like the other signal-following RPCs', async () => {
+    const { api } = await harness(undefined, undefined, {
+      fileBrowser: {
+        readFile: (_path: string, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => { reject(new Error('read aborted')) }, { once: true })
+        }),
+      },
+    })
+    const abort = new AbortController()
+    const pending = api.host.readFile(request({ path: '/x' }), abort.signal)
+    abort.abort()
+    expect((await pending).result).toMatchObject({ ok: false, error: { code: 'cancelled' } })
+  })
+
+  it('serves the read RPC under a native composition (file reading is not picker-gated)', async () => {
+    const { api } = await harness()
+    expect((await api.host.readFile(request({ path: '/x' }), new AbortController().signal)).result).toMatchObject({
+      ok: true, value: { content: 'hello world' },
+    })
+  })
+})
+
+describe('host.writeFile', () => {
+  it('serves atomic writes through the file-browser service', async () => {
+    const { api } = await harness()
+    const written = await api.host.writeFile(request({ path: '/home/user/a.ts', content: 'edited' }))
+    expect(written.result).toEqual({ ok: true, value: { path: '/home/user/a.ts' } })
+  })
+
+  it('maps typed write failures onto the wire error codes and folds unknown throws to internal', async () => {
+    const { api } = await harness()
+    expect((await api.host.writeFile(request({ path: '/readonly', content: 'x' }))).result)
+      .toMatchObject({ ok: false, error: { code: 'file-write-failed', details: { path: '/readonly' } } })
+    expect((await api.host.writeFile(request({ path: '/detached', content: 'x' }))).result)
+      .toMatchObject({ ok: false, error: { code: 'internal' } })
   })
 })
 

@@ -87,14 +87,20 @@ export class FakeApiClient implements IApiClient {
   onListDirectory: (payload: unknown) => Promise<RpcResponse<{
     path: string
     home: string
-    crumbs: { name: string; path: string; hidden: boolean }[]
-    entries: { name: string; path: string; hidden: boolean }[]
+    crumbs: { name: string; path: string; hidden: boolean; kind: 'directory' | 'file' }[]
+    entries: { name: string; path: string; hidden: boolean; kind: 'directory' | 'file' }[]
     truncated: boolean
   }>> =
-    () => Promise.resolve(ok({ path: '/home/fake', home: '/home/fake', crumbs: [{ name: '/', path: '/', hidden: false }], entries: [], truncated: false }))
+    () => Promise.resolve(ok({ path: '/home/fake', home: '/home/fake', crumbs: [{ name: '/', path: '/', hidden: false, kind: 'directory' }], entries: [], truncated: false }))
 
   onCreateDirectory: (payload: unknown) => Promise<RpcResponse<{ path: string }>> =
     () => Promise.resolve(ok({ path: '/home/fake/new' }))
+
+  onReadFile: (payload: unknown) => Promise<RpcResponse<{ content: string }>> =
+    () => Promise.resolve(ok({ content: '' }))
+
+  onWriteFile: (payload: unknown) => Promise<RpcResponse<{ path: string }>> =
+    payload => Promise.resolve(ok({ path: (payload as { path: string }).path }))
 
   private readonly muxConns: StreamConn<MuxFrame>[] = []
   private readonly hostConns: StreamConn<HostFrame>[] = []
@@ -145,6 +151,8 @@ export class FakeApiClient implements IApiClient {
     pickDirectory: payload => this.record('host.pickDirectory', payload, this.onPickDirectory(payload)),
     listDirectory: payload => this.record('host.listDirectory', payload, this.onListDirectory(payload)),
     createDirectory: payload => this.record('host.createDirectory', payload, this.onCreateDirectory(payload)),
+    readFile: payload => this.record('host.readFile', payload, this.onReadFile(payload)),
+    writeFile: payload => this.record('host.writeFile', payload, this.onWriteFile(payload)),
     openPath: payload => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
 

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionRuntime } from '../src/client/sessions/service.ts'
 import { WorkspaceManager } from '../src/client/workspaces/manager.ts'
-import { DirectoryBrowseError, WorkspaceCreateError, WorkspaceRuntime } from '../src/client/workspaces/service.ts'
+import { DirectoryBrowseError, FileReadError, FileWriteError, WorkspaceCreateError, WorkspaceRuntime } from '../src/client/workspaces/service.ts'
 import { FakeApiClient, deferred, err, fakeRemote, ok } from './fake-api.client.ts'
 
 const sid = (id: string): SessionId => id as SessionId
@@ -332,7 +332,12 @@ describe('WorkspaceRuntime', () => {
     const ctx = new Context()
     const api = new FakeApiClient()
     const workspaces = new WorkspaceRuntime(ctx, api, new SessionRuntime(ctx, api, fakeRemote()))
-    const listing = { path: '/home/u', home: '/home/u', crumbs: [{ name: '/', path: '/', hidden: false }], entries: [{ name: 'p', path: '/home/u/p', hidden: false }], truncated: false }
+    const listing = {
+      path: '/home/u', home: '/home/u',
+      crumbs: [{ name: '/', path: '/', hidden: false, kind: 'directory' as const }],
+      entries: [{ name: 'p', path: '/home/u/p', hidden: false, kind: 'directory' as const }],
+      truncated: false,
+    }
     api.onListDirectory = () => Promise.resolve(ok(listing))
     await expect(workspaces.listDirectory()).resolves.toEqual(listing)
     await expect(workspaces.listDirectory('/home/u')).resolves.toEqual(listing)
@@ -347,6 +352,31 @@ describe('WorkspaceRuntime', () => {
     expect(api.callsOf('host.createDirectory')).toEqual([{ path: '/home/u', name: 'fresh' }])
     api.onCreateDirectory = () => Promise.resolve(err({ code: 'directory-exists', message: 'taken', details: { path: '/home/u/fresh' } }))
     await expect(workspaces.createDirectory('/home/u', 'fresh')).rejects.toMatchObject({ rpcError: { code: 'directory-exists' } })
+  })
+
+  it('reads text files through the browse wire, wrapping business failures', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const workspaces = new WorkspaceRuntime(ctx, api, new SessionRuntime(ctx, api, fakeRemote()))
+    api.onReadFile = () => Promise.resolve(ok({ content: 'hello' }))
+    await expect(workspaces.readFile('/home/u/a.txt')).resolves.toBe('hello')
+    expect(api.callsOf('host.readFile')).toEqual([{ path: '/home/u/a.txt' }])
+    api.onReadFile = () => Promise.resolve(err({ code: 'file-too-large', message: 'too big', details: { path: '/home/u/big' } }))
+    const failure = workspaces.readFile('/home/u/big')
+    await expect(failure).rejects.toBeInstanceOf(FileReadError)
+    await expect(failure).rejects.toMatchObject({ rpcError: { code: 'file-too-large' } })
+  })
+
+  it('writes text files through the browse wire, wrapping business failures', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const workspaces = new WorkspaceRuntime(ctx, api, new SessionRuntime(ctx, api, fakeRemote()))
+    await workspaces.writeFile('/home/u/a.txt', 'edited')
+    expect(api.callsOf('host.writeFile')).toEqual([{ path: '/home/u/a.txt', content: 'edited' }])
+    api.onWriteFile = () => Promise.resolve(err({ code: 'file-write-failed', message: 'read-only', details: { path: '/home/u/a.txt' } }))
+    const failure = workspaces.writeFile('/home/u/a.txt', 'edited')
+    await expect(failure).rejects.toBeInstanceOf(FileWriteError)
+    await expect(failure).rejects.toMatchObject({ rpcError: { code: 'file-write-failed' } })
   })
 
   it('opens a filesystem path through the host without local state', async () => {
