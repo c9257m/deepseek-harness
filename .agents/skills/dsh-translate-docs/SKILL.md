@@ -13,7 +13,7 @@ Run this extended workflow only when the user explicitly invokes `dsh-translate-
 
 ## What this skill is
 
-**This skill is guidance, not a translation memory.** It is the workflow map for keeping `foo.md ↔ foo.zh.md` pairs consistent and natural in both languages. Both languages carry equal authority — a change is authored in either one, and that side is the source for that update. You are the translator: the rules below say what must hold, not how to phrase any particular sentence — phrasing judgment is yours, terminology is not.
+**This skill is guidance, not a translation memory.** It is the workflow map for keeping `foo.md ↔ foo.zh.md` pairs (a reversed pair links `foo.md` ↔ `foo.en.md` instead — the root README is reversed, so its Chinese side is `README.md` and its English side `README.en.md`) consistent and natural in both languages. Both languages carry equal authority — a change is authored in either one, and that side is the source for that update. You are the translator: the rules below say what must hold, not how to phrase any particular sentence — phrasing judgment is yours, terminology is not.
 
 ## Triage by change type — this decides everything else
 
@@ -39,7 +39,7 @@ When translations need to be written from scratch, the orchestrating agent does 
 
 ### Sources of truth (read, don't re-summarize)
 
-- **[docs/i18n/README.md](../../../docs/i18n/README.md)** — the pairing contract: the three-file pair (`foo.md`, `foo.zh.md`, `foo.i18n.yaml`), the consistency record's both-side blob hashes, the language-switcher lines, scope, and exclusions.
+- **[docs/i18n/README.md](../../../docs/i18n/README.md)** — the pairing contract: the three-file pair (`foo.md`, `foo.zh.md`, `foo.i18n.yaml`, or `foo.md` + `foo.en.md` + `foo.i18n.yaml` for a reversed pair), the consistency record's both-side blob hashes, the language-switcher lines, scope, and exclusions.
 - **[docs/i18n/translation-rules.md](../../../docs/i18n/translation-rules.md)** — how to translate: faithfulness, structure preservation, terminology discipline, typography (MUST/SHOULD levels).
 - **[docs/i18n/terminology.md](../../../docs/i18n/terminology.md)** — the terminology table, binding in both directions. Load it BEFORE translating, not when a term feels uncertain; the terms you don't notice are the ones that drift.
 - **[docs/i18n/translation-prompt.md](../../../docs/i18n/translation-prompt.md)** — the automated pipeline's calibrated machine-consumed template. Agents using this skill do not render it; the terminology table is the only repository file the automated renderer injects, while this skill and `translation-rules.md` remain binding for agent-authored translations.
@@ -52,7 +52,7 @@ When translations need to be written from scratch, the orchestrating agent does 
 - **Read the completed counterpart alone.** After the source comparison, read the translated file without the source beside it and rewrite phrasing whose awkwardness only becomes visible in isolation.
 - Write only the final text to the file, never drafts or notes.
 - Every term in [terminology.md](../../../docs/i18n/terminology.md) renders exactly as specified. For a Chinese target, use the Chinese and first-occurrence columns; an unlisted term needs a citable Chinese OSS/vendor precedent or stays English under 「待定术语」. For an English target, use the English column and an established English technical term; preserve an ambiguous source term with a short gloss and list it as pending. Never invent a rendering inline.
-- Code blocks are byte-identical across the pair, comments included. Relative links keep their `.md` targets; only the switcher line links `.zh.md`.
+- Code blocks are byte-identical across the pair, comments included. Relative links keep their `.md` targets; only the switcher line links the counterpart (`.zh.md` in an ordinary pair, `.en.md` when the pair is reversed).
 - The pairing gate checks heading depths, fenced blocks, table row and column counts, list kinds, ordered-list starts, list item counts, and link targets. In Pass 2, manually verify list and table order, noncanonical list numbering, inline code, emphasis, meaning, terminology, and tone.
 
 ## Find the work
@@ -63,7 +63,7 @@ When translations need to be written from scratch, the orchestrating agent does 
 
 ## Finish the pair
 
-1. Switcher: `[English](foo.md) | 中文` immediately after the Chinese file's H1, `English | [中文](foo.zh.md)` after the English file's H1 — add both if this is a new pair, except that a generator-owned English source stays byte-identical to generator output and omits its switcher while the Chinese counterpart still links back.
+1. Switcher: `[English](<english side>) | 中文` immediately after the Chinese file's H1, `English | [中文](<chinese side>)` after the English file's H1 — `foo.md` / `foo.zh.md` in an ordinary pair, `foo.en.md` / `foo.md` when reversed. Add both if this is a new pair, except that a generator-owned English source stays byte-identical to generator output and omits its switcher while the Chinese counterpart still links back.
 2. Record consistency: `pnpm run verify-translation-pairing --write <pair>` recomputes and records both sides' full blob hashes in `foo.i18n.yaml`. The yaml diff in your PR is the reviewable statement "I confirmed these two say the same thing" — only run it after you actually have.
 3. No manifest entry is needed for an ordinary document: every in-scope source requires a pair. Change [scripts/translation-pairing.manifest.json](../../../scripts/translation-pairing.manifest.json) only when the owning policy documents a genuine generated, instructional, or bilingual-by-construction exclusion.
 4. Before the PR: the touched pairs are green under the scoped check; `pnpm run doc-sync` (which includes the corpus-wide pairing check plus `verify-md-wrap`/`verify-md-links`) runs once at PR level per [dsh-pre-push-checks](../dsh-pre-push-checks/SKILL.md), not inside each translation task.

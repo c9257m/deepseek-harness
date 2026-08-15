@@ -124,7 +124,7 @@ export interface TranslationPairingManifest {
   excluded: string[]
 }
 
-const README_ARTIFACT = /(?:^|\/)readme(?:\.md|\.zh\.md|\.i18n\.yaml)$/i
+const README_ARTIFACT = /(?:^|\/)readme(?:\.md|\.zh\.md|\.en\.md|\.i18n\.yaml)$/i
 const ROOT_CONTRIBUTING_ARTIFACT = /^contributing(?:\.md|\.zh\.md|\.i18n\.yaml)$/i
 const NON_SOURCE_DIRECTORIES = new Set([
   'node_modules',
@@ -135,6 +135,9 @@ const NON_SOURCE_DIRECTORIES = new Set([
   '.sessions',
   '.storages',
   'tmp',
+  'dist',
+  'out',
+  'runtime',
   'dist-exe',
   '__pycache__',
   '.pytest_cache',
@@ -155,6 +158,9 @@ export const TRANSLATION_SCOPE_GLOB_EXCLUDES = [
   '**/.sessions/**',
   '**/.storages/**',
   '**/tmp/**',
+  '**/dist/**',
+  '**/out/**',
+  '**/runtime/**',
   '**/dist-exe/**',
   '**/__pycache__/**',
   '**/.pytest_cache/**',

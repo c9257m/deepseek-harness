@@ -7,9 +7,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { gitBlobHash, readGitIndexBlob, storeGitBlob } from './translation-pairing-git.ts'
 import {
+  isReversedPairEnglish,
+  isReversedPairZh,
   parseTranslationPairingRecord,
   renderTranslationPairingRecord,
   translationPairPaths,
+  translationPairPathsFromMeta,
 } from './translation-pairing-record.ts'
 import {
   blobHash,
@@ -195,9 +198,45 @@ describe('translation pairing records', () => {
   })
 })
 
+describe('reversed pairing records', () => {
+  const triplet = { source: 'README.en.md', zh: 'README.md', meta: 'README.i18n.yaml' }
+
+  it('derives the reversed triplet from either member spelling', () => {
+    expect(translationPairPaths('README.en.md')).toEqual(triplet)
+    expect(translationPairPaths('README.md')).toEqual(triplet)
+    expect(translationPairPathsFromMeta('README.i18n.yaml')).toEqual(triplet)
+  })
+
+  it('classifies reversed members and leaves ordinary pairs alone', () => {
+    expect(isReversedPairEnglish('README.en.md')).toBe(true)
+    expect(isReversedPairZh('README.md')).toBe(true)
+    expect(isReversedPairEnglish('docs/guide/README.en.md')).toBe(false)
+    expect(isReversedPairZh('docs/guide/README.md')).toBe(false)
+    expect(isReversedPairZh('README.en.md')).toBe(false)
+    expect(translationPairPaths('docs/foo.md')).toEqual({
+      source: 'docs/foo.md',
+      zh: 'docs/foo.zh.md',
+      meta: 'docs/foo.i18n.yaml',
+    })
+  })
+
+  it('round-trips the reversed two-hash record', () => {
+    const record = { sourceHash: '1'.repeat(40), zhHash: '2'.repeat(40) }
+    const rendered = renderTranslationPairingRecord(triplet, record)
+    expect(rendered).toContain('README.en.md: ')
+    expect(rendered).toContain('README.md: ')
+    expect(parseTranslationPairingRecord(rendered, triplet)).toEqual(record)
+  })
+
+  it('rejects a stray .en.md path outside the declared stems', () => {
+    expect(() => translationPairPaths('docs/guide/README.en.md')).toThrow(/expected a pair member path/)
+  })
+})
+
 describe('translation scope discovery', () => {
   it.each([
     'README.md',
+    'README.en.md',
     'CONTRIBUTING.md',
     'CONTRIBUTING.zh.md',
     'CONTRIBUTING.i18n.yaml',

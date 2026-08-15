@@ -23,19 +23,56 @@ export interface TranslationPairingRecord {
 const META_LINE = /^([^:#]+\.md): ([0-9a-f]{40})$/
 
 /**
- * Derive the counterpart and consistency-record paths from an English document.
+ * Stems of reversed pairs. A reversed pair's unsuffixed `stem.md` is the
+ * Simplified Chinese side (the default-displayed document, e.g. the root
+ * README on GitHub) and its English side carries the `.en.md` suffix. Every
+ * other pairing rule — the three-file triplet, the consistency record, the
+ * switcher, and the structural signature — applies unchanged.
+ */
+export const REVERSED_PAIR_STEMS: readonly string[] = ['README']
+
+/** Whether a repository-relative path is the English side of a reversed pair. */
+export function isReversedPairEnglish(file: string): boolean {
+  return file.endsWith('.en.md') && REVERSED_PAIR_STEMS.includes(file.slice(0, -'.en.md'.length))
+}
+
+/** Whether a repository-relative path is the Chinese side of a reversed pair. */
+export function isReversedPairZh(file: string): boolean {
+  return file.endsWith('.md')
+    && !file.endsWith('.zh.md')
+    && !file.endsWith('.en.md')
+    && REVERSED_PAIR_STEMS.includes(file.slice(0, -'.md'.length))
+}
+
+/**
+ * Derive the three-path pair from any of its member spellings. In an
+ * ordinary pair the input is the English `foo.md`; in a reversed pair it may
+ * be the English `foo.en.md` or the unsuffixed Chinese `foo.md`. The return
+ * value always keys the English path as `source`.
  *
- * @param source - Repository-relative English Markdown path.
+ * @param member - Repository-relative English Markdown path, or the
+ *   unsuffixed Chinese side of a reversed pair.
  * @returns The complete three-path pair.
  */
-export function translationPairPaths(source: string): TranslationPairPaths {
-  if (!source.endsWith('.md') || source.endsWith('.zh.md')) {
-    throw new Error(`expected an English Markdown path, received ${JSON.stringify(source)}`)
+export function translationPairPaths(member: string): TranslationPairPaths {
+  if (member.endsWith('.en.md')) {
+    if (!isReversedPairEnglish(member)) {
+      throw new Error(`expected a pair member path, received ${JSON.stringify(member)}`)
+    }
+    const stem = member.slice(0, -'.en.md'.length)
+    return { source: member, zh: `${stem}.md`, meta: `${stem}.i18n.yaml` }
+  }
+  if (!member.endsWith('.md') || member.endsWith('.zh.md')) {
+    throw new Error(`expected a pair member path, received ${JSON.stringify(member)}`)
+  }
+  if (isReversedPairZh(member)) {
+    const stem = member.slice(0, -'.md'.length)
+    return { source: `${stem}.en.md`, zh: member, meta: `${stem}.i18n.yaml` }
   }
   return {
-    source,
-    zh: source.replace(/\.md$/, '.zh.md'),
-    meta: source.replace(/\.md$/, '.i18n.yaml'),
+    source: member,
+    zh: member.replace(/\.md$/, '.zh.md'),
+    meta: member.replace(/\.md$/, '.i18n.yaml'),
   }
 }
 

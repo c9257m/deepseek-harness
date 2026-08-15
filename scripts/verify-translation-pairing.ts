@@ -14,6 +14,7 @@ import { existsSync, globSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve, sep } from 'node:path'
 import { gitBlobHash, readGitIndexBlob, storeGitBlob } from './translation-pairing-git.ts'
 import {
+  isReversedPairZh,
   parseTranslationPairingRecord,
   renderTranslationPairingRecord,
   translationPairPaths,
@@ -108,9 +109,9 @@ if (request.scope === 'pairs') {
     }
   }
 }
-const translations = [...files].filter(f => f.endsWith('.zh.md')).sort()
+const translations = [...files].filter(f => f.endsWith('.zh.md') || isReversedPairZh(f)).sort()
 const metas = [...files].filter(f => f.endsWith('.i18n.yaml')).sort()
-const sources = [...files].filter(f => f.endsWith('.md') && !f.endsWith('.zh.md')).sort()
+const sources = [...files].filter(f => f.endsWith('.md') && !f.endsWith('.zh.md') && !isReversedPairZh(f)).sort()
 
 if (request.scope === 'pairs') {
   const rejected = request.anchors.filter(anchor => !isTranslationScopeFile(anchor) || isExcluded(anchor))
@@ -178,11 +179,17 @@ for (const source of sources) {
 }
 
 // 2. Every pair that exists at all is complete and consistent. Anchor on the
-// union of .zh.md files and .i18n.yaml records so a half-deleted pair is
-// caught from either remnant.
+// union of .zh.md files, reversed-pair Chinese files, and .i18n.yaml records
+// so a half-deleted pair is caught from either remnant. Anchors normalize to
+// the canonical English path so both spellings of a reversed pair collapse
+// into one entry.
 const pairAnchors = new Set<string>()
-for (const zh of translations) pairAnchors.add(zh.replace(/\.zh\.md$/, '.md'))
-for (const meta of metas) pairAnchors.add(meta.replace(/\.i18n\.yaml$/, '.md'))
+for (const zh of translations) {
+  pairAnchors.add(zh.endsWith('.zh.md') ? zh.replace(/\.zh\.md$/, '.md') : translationPairPaths(zh).source)
+}
+for (const meta of metas) {
+  pairAnchors.add(translationPairPaths(meta.replace(/\.i18n\.yaml$/, '.md')).source)
+}
 
 for (const source of [...pairAnchors].sort()) {
   const paths = translationPairPaths(source)

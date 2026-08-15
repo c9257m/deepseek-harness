@@ -8,7 +8,7 @@
 
 | 占位符 | 填入内容 | 来源 |
 |---|---|---|
-| `{{source_lang}}` | 源语言名（`English` / `Chinese`） | 由改动侧文件推断：`.zh.md` 被改则为 `Chinese` |
+| `{{source_lang}}` | 源语言名（`English` / `Chinese`） | 由改动侧文件推断：`.zh.md` 后缀或反向配对（根 `README.md`）的默认文件被改则为 `Chinese` |
 | `{{target_lang}}` | 目标语言名（`Chinese` / `English`） | 与 `{{source_lang}}` 相对 |
 | `{{terminology}}` | [terminology.md](terminology.md) 的完整表格（Markdown 原文） | 渲染时读取仓库当前版本，不缓存 |
 
@@ -20,7 +20,7 @@
 
 流水线使用**整篇文档**的中英对照作为 few-shot，不是模板内嵌的句子级正误例。以下 5 组配对文档均经过人工评审，以仓库当前版本为准、随仓库更新：
 
-- `README.md` ↔ `README.zh.md`
+- `README.en.md` ↔ `README.md`
 - `docs/development.md` ↔ `docs/development.zh.md`
 - `docs/i18n/README.md` ↔ `docs/i18n/README.zh.md`
 - `docs/i18n/translation-rules.md` ↔ `docs/i18n/translation-rules.zh.md`
@@ -253,9 +253,9 @@ Below are representative examples of common problems and their corrections. Foll
 - Good: `# full-screen TUI coding agent (needs DEEPSEEK_API_KEY)` (keep exactly as-is, byte-for-byte)
 
 ### Language switcher — flip direction
-- Source file (English) has: `English | [中文](README.zh.md)`
-- Bad (copying source unchanged): `English | [中文](README.zh.md)`
-- Good (flipped for Chinese file): `[English](README.md) | 中文`
+- Source file (English, `README.en.md`) has: `English | [中文](README.md)`
+- Bad (copying source unchanged): `English | [中文](README.md)`
+- Good (flipped for the Chinese default `README.md`): `[English](README.en.md) | 中文`
 
 ---
 

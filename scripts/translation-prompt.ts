@@ -10,6 +10,7 @@
  */
 
 import { basename } from 'node:path'
+import { isReversedPairEnglish, isReversedPairZh } from './translation-pairing-record.ts'
 
 /** Placeholder names supported by the committed translation prompt. */
 export const TRANSLATION_PROMPT_PLACEHOLDERS = ['source_lang', 'target_lang', 'terminology'] as const
@@ -75,15 +76,22 @@ function translationFiles(input: Pick<TranslationPromptInput, 'sourceFilename' |
   if (basename(input.sourceFilename) !== input.sourceFilename) {
     throw new Error(`translation prompt: sourceFilename must be a basename; got ${JSON.stringify(input.sourceFilename)}`)
   }
-  const sourceIsChinese = input.sourceFilename.endsWith('.zh.md')
-  const sourceIsEnglish = input.sourceFilename.endsWith('.md') && !sourceIsChinese
+  const sourceIsChinese = input.sourceFilename.endsWith('.zh.md') || isReversedPairZh(input.sourceFilename)
+  const sourceIsEnglish = isReversedPairEnglish(input.sourceFilename)
+    || (input.sourceFilename.endsWith('.md') && !sourceIsChinese && !input.sourceFilename.endsWith('.en.md'))
   if (input.sourceLanguage === 'Chinese' ? !sourceIsChinese : !sourceIsEnglish) {
     throw new Error(`translation prompt: ${input.sourceFilename} does not match source language ${input.sourceLanguage}`)
   }
   if (sourceIsChinese) {
+    const targetFilename = isReversedPairZh(input.sourceFilename)
+      ? `${input.sourceFilename.slice(0, -'.md'.length)}.en.md`
+      : input.sourceFilename.replace(/\.zh\.md$/, '.md')
+    return { targetFilename, targetSwitcher: `English | [中文](${input.sourceFilename})` }
+  }
+  if (isReversedPairEnglish(input.sourceFilename)) {
     return {
-      targetFilename: input.sourceFilename.replace(/\.zh\.md$/, '.md'),
-      targetSwitcher: `English | [中文](${input.sourceFilename})`,
+      targetFilename: `${input.sourceFilename.slice(0, -'.en.md'.length)}.md`,
+      targetSwitcher: `[English](${input.sourceFilename}) | 中文`,
     }
   }
   return {

@@ -1,5 +1,7 @@
 # `@deepseek-ai/dsh-desktop`
 
+English | [中文](README.zh.md)
+
 Electron desktop shell for the dsh Web UI. It starts the harness web server as a child process on Node and shows the served UI in a native window, so a packaged install needs neither a separate Node.js installation nor a terminal command: double-click the desktop shortcut and the harness opens.
 
 The shell owns only process and window lifecycle — spawning and stopping the server, the single instance lock, and same-origin window handling. Model keys, workspaces, and plugins are configured in the Web UI itself.

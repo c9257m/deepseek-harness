@@ -38,6 +38,7 @@ import {
   type BriefScope,
   type MarkdownSpan,
 } from './translation-brief.ts'
+import { isReversedPairZh, translationPairPaths } from './translation-pairing-record.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const manifest = parseTranslationPairingManifest(readFileSync(join(root, 'scripts/translation-pairing.manifest.json'), 'utf8'))
@@ -100,27 +101,26 @@ interface PairState {
 
 /** Load one pair's recorded and current state, or explain why it cannot be briefed. */
 function loadPair(anchor: string): PairState | string {
-  const zh = anchor.replace(/\.md$/, '.zh.md')
-  const meta = anchor.replace(/\.md$/, '.i18n.yaml')
-  if (!isTranslationScopeFile(anchor) || isExcluded(anchor)) {
-    return `${anchor}: not an in-scope documentation pair (docs/i18n/README.md)`
+  const { source, zh, meta } = translationPairPaths(anchor)
+  if (!isTranslationScopeFile(source) || isExcluded(source)) {
+    return `${source}: not an in-scope documentation pair (docs/i18n/README.md)`
   }
-  const missing = [anchor, zh, meta].filter(file => !existsSync(join(root, file)))
+  const missing = [source, zh, meta].filter(file => !existsSync(join(root, file)))
   if (missing.length > 0) {
-    return `${anchor}: incomplete pair (missing ${missing.join(', ')}) — a new counterpart is whole-document translation work, not a minimal update`
+    return `${source}: incomplete pair (missing ${missing.join(', ')}) — a new counterpart is whole-document translation work, not a minimal update`
   }
   const record = parseMeta(readFileSync(join(root, meta), 'utf8'))
-  const enRecorded = record?.get(basename(anchor))
+  const enRecorded = record?.get(basename(source))
   const zhRecorded = record?.get(basename(zh))
   if (record === undefined || enRecorded === undefined || zhRecorded === undefined) {
     return `${meta}: malformed consistency record`
   }
-  const enCurrent = readFileSync(join(root, anchor), 'utf8')
+  const enCurrent = readFileSync(join(root, source), 'utf8')
   const zhCurrent = readFileSync(join(root, zh), 'utf8')
   const enLast = blobText(enRecorded)
   const zhLast = blobText(zhRecorded)
   return {
-    anchor,
+    anchor: source,
     zh,
     meta,
     enDrifted: enCurrent !== enLast,
@@ -217,7 +217,9 @@ function applyMechanical(counterpartPath: string, sourceCurrent: string, result:
   const counterpartBase = basename(counterpartPath)
   const sourceBase = counterpartBase.endsWith('.zh.md')
     ? counterpartBase.replace(/\.zh\.md$/, '.md')
-    : counterpartBase.replace(/\.md$/, '.zh.md')
+    : isReversedPairZh(counterpartBase)
+      ? `${counterpartBase.slice(0, -'.md'.length)}.en.md`
+      : `${counterpartBase.replace(/\.md$/, '')}.zh.md`
   const errors = translationStructureDiff(
     translationStructureSignature(parseTranslationMarkdown(sourceCurrent), counterpartBase),
     translationStructureSignature(parseTranslationMarkdown(result), sourceBase),

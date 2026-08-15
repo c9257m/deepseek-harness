@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-15-desktop-electron-shell.zh.md)
+
 ## Problem
 
 `dsh web` runs only from a terminal: the operator installs Node, runs `pnpm dsh web` or `npx @deepseek-ai/dsh web`, and opens a browser at `http://127.0.0.1:3080`. The repository's one-click `start-web.bat` still requires the pnpm/Node toolchain and a build. A desktop deliverable should start the harness and show its UI from a single desktop shortcut, with no Node installation and no terminal command.
