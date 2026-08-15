@@ -27,6 +27,10 @@ linkWorkspacePackages: true
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  # electron-builder 26.15 reads ElectronDownloadCacheMode from @electron/get,
+  # which the 3.0.0 its default ^3.0.0 range resolves lacks; the electron
+  # package needs ^5.0.0 — one 5.x satisfies both consumers.
+  '@electron/get': '5.1.0'
 
 peerDependencyRules:
   allowedVersions:
@@ -53,6 +57,10 @@ allowBuilds:
   # The Python runtime deploy includes the reviewed workspace postinstall that
   # restores the executable bit on node-pty's macOS spawn helper.
   '@deepseek-ai/dsh-subprocess-local@file:packages/subprocess/subprocess-local': true
+  # electron-builder's Squirrel.Windows installer path ships an install script
+  # that downloads Squirrel binaries; the desktop shell builds NSIS installers
+  # only, so the script stays denied.
+  electron-winstaller: false
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole

@@ -1,0 +1,45 @@
+# DeepSeek Harness desktop packaging (electron-builder).
+
+appId: com.deepseekai.dsh
+productName: DeepSeek Harness
+directories:
+  output: dist
+# Loose files, not asar: the shell spawns the harness CLI as a Node child
+# (bundled runtime under resources/runtime) and native spawn helpers resolve
+# real paths; an archive adds no size benefit for an app that already ships
+# the full node_modules closure.
+asar: false
+# Ship native dependencies as pnpm installed them. On Windows the web profile
+# mounts the PowerShell stack, never node-pty, and the remaining native
+# modules (koffi, node-addon-require-builtin) are N-API prebuilds, so no
+# Electron-ABI rebuild (and no compiler toolchain) is required.
+npmRebuild: false
+files:
+  - lib/**
+  - node_modules/**
+  # Sourcemaps are debug aids; the packaged runtime never reads them and they
+  # add ~50MB across the harness closure.
+  - '!**/*.map'
+# Chromium ships a locale pack per language; the Web UI localizes itself, so
+# the shell only needs the two it actually uses.
+electronLanguages:
+  - en-US
+  - zh-CN
+# LZMA at the maximum preset shrinks the installer further at the cost of
+# pack time.
+compression: maximum
+# The bundled Node.js runtime that runs the harness server. `scripts/fetch-node-runtime.mjs`
+# populates `runtime/` before packaging; the shell spawns `resources/runtime/node`.
+extraResources:
+  - from: runtime
+    to: runtime
+    filter:
+      - '**/*'
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: DeepSeek Harness
