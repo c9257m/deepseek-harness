@@ -35,7 +35,7 @@ export type {} from '@deepseek-ai/dsh-settings/types'
 export type {
   ClientResponse, ConfigurableProviderView, ConnectionHandle, ConnectionSinks, ContentBlock,
   CredentialView, DirectoryListing, DiscoveredModelView, GitBranchValue, GitCommitValue,
-  GitFileStatus, GitOutputValue, GitStatusValue, HistoryEntry, HostFrame, IApiClient,
+  GitDiffHunk, GitDiffLine, GitFileDiff, GitFileStatus, GitOutputValue, GitStatusValue, HistoryEntry, HostFrame, IApiClient,
   MessageId, ModelCatalogFailure, ModelProviderGroup, ModelReasoningEffort, ModelSelection,
   MuxFrame, PromptContentPart, QuestionResponsePayload, QueueAction, RpcError, RpcId, RpcReceipt,
   RpcRequest, RpcResponse, RpcResult, SessionId, SessionModels, SessionSearchItem,

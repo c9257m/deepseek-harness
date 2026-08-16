@@ -160,6 +160,9 @@ export class FakeApiClient implements IApiClient {
     status: payload => this.record('git.status', payload, Promise.resolve(ok({
       status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true },
     }))),
+    diff: payload => this.record('git.diff', payload, Promise.resolve(ok({
+      diff: { kind: 'tracked', hunks: [] },
+    }))),
     commit: payload => this.record('git.commit', payload, Promise.resolve(ok({
       commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: (payload as { message: string }).message },
     }))),

@@ -85,6 +85,7 @@ function scriptedApi(overrides: {
     },
     git: {
       status: r => ok(r, { status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true } }),
+      diff: r => ok(r, { diff: { kind: 'tracked', hunks: [] } }),
       commit: r => ok(r, { commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: r.payload.message } }),
       stage: r => ok(r, { files: [...r.payload.files] }),
       unstage: r => ok(r, { files: [...r.payload.files] }),

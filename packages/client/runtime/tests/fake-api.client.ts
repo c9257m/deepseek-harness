@@ -2,7 +2,7 @@
 // data source on a real clock; behavior tests need per-case responses and
 // deferred-controlled timing). Streams are hand pumps: pushMux/pushHost.
 import type {
-  ClientResponse, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  ClientResponse, GitBranchValue, GitCommitValue, GitFileDiff, GitOutputValue, GitStatusValue,
   HostFrame, IApiClient, ModelSelection, MuxFrame,
   RpcError, RpcReceipt, RpcRequest, RpcResponse, SessionId, SessionModels, SessionSearchItem, SkillEntry,
   WorkspaceId, WorkspaceView,
@@ -193,6 +193,7 @@ export class FakeApiClient implements IApiClient {
 
   readonly git: IApiClient['git'] = {
     status: (payload: unknown) => this.record('git.status', payload, this.onGitStatus(payload)),
+    diff: (payload: unknown) => this.record('git.diff', payload, this.onGitDiff(payload)),
     commit: (payload: unknown) => this.record('git.commit', payload, this.onGitCommit(payload)),
     stage: (payload: unknown) => this.record('git.stage', payload, this.onGitStage(payload)),
     unstage: (payload: unknown) => this.record('git.unstage', payload, this.onGitUnstage(payload)),
@@ -204,6 +205,8 @@ export class FakeApiClient implements IApiClient {
 
   onGitStatus: (payload: unknown) => Promise<RpcResponse<{ status: GitStatusValue }>> =
     () => Promise.resolve(ok({ status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true } }))
+  onGitDiff: (payload: unknown) => Promise<RpcResponse<{ diff: GitFileDiff }>> =
+    () => Promise.resolve(ok({ diff: { kind: 'tracked', hunks: [] } }))
   onGitCommit: (payload: unknown) => Promise<RpcResponse<{ commit: GitCommitValue }>> =
     payload => Promise.resolve(ok({ commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: (payload as { message: string }).message } }))
   onGitStage: (payload: unknown) => Promise<RpcResponse<{ files: string[] }>> =

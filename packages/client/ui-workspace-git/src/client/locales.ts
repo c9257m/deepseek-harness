@@ -39,6 +39,7 @@ export const zh = {
   'git.committed': '已提交 {shortHash}',
   'git.pushDone': '推送完成',
   'git.pullDone': '拉取完成',
+  'git.openFile': '打开 {name}',
 } as const
 
 /** English mirror (equal authority; the gate checks structural parity only). */
@@ -77,6 +78,7 @@ export const en: Record<WorkspaceGitKey, string> = {
   'git.committed': 'Committed {shortHash}',
   'git.pushDone': 'Push finished',
   'git.pullDone': 'Pull finished',
+  'git.openFile': 'Open {name}',
 }
 
 /** All panel copy keys (the locale namespace's key set). */

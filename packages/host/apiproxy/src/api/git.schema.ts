@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import type { GitFileStatus } from './git.ts'
+import type { GitDiffHunk, GitDiffLine, GitFileStatus } from './git.ts'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 
@@ -86,6 +86,35 @@ export const gitCheckoutRequestSchema = z.object({
 export const gitCheckoutValueSchema = z.object({
   branch: z.string(),
 }) satisfies z.ZodType<Wire<ResponseValue<'git.checkout'>>>
+
+/** git.diff request payload: the workspace directory and the file to diff. */
+export const gitDiffRequestSchema = z.object({
+  path: z.string().min(1),
+  file: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'git.diff'>>>
+
+/** One record inside a unified-diff hunk. */
+export const gitDiffLineSchema = z.object({
+  type: z.enum(['context', 'added', 'deleted']),
+  text: z.string(),
+}) satisfies z.ZodType<Wire<GitDiffLine>>
+
+/** One `@@` hunk of a unified diff with its old/new line ranges. */
+export const gitDiffHunkSchema = z.object({
+  oldStart: z.number().int().nonnegative(),
+  oldCount: z.number().int().nonnegative(),
+  newStart: z.number().int().nonnegative(),
+  newCount: z.number().int().nonnegative(),
+  lines: z.array(gitDiffLineSchema),
+}) satisfies z.ZodType<Wire<GitDiffHunk>>
+
+/** git.diff response value: the parsed working-tree-vs-HEAD diff of one file. */
+export const gitDiffValueSchema = z.object({
+  diff: z.object({
+    kind: z.enum(['tracked', 'untracked']),
+    hunks: z.array(gitDiffHunkSchema),
+  }),
+}) satisfies z.ZodType<Wire<ResponseValue<'git.diff'>>>
 
 /** git.stage / git.unstage request payload: the workspace directory and the paths to move. */
 export const gitStageUnstageRequestSchema = z.object({

@@ -51,7 +51,8 @@ export type {
 } from './sessions.ts'
 export type { DirectoryEntry, DirectoryListing, HostApi } from './host.ts'
 export type {
-  GitApi, GitBranchValue, GitCommitValue, GitFileStatus, GitOutputValue, GitStatusValue,
+  GitApi, GitBranchValue, GitCommitValue, GitDiffHunk, GitDiffLine, GitFileDiff,
+  GitFileStatus, GitOutputValue, GitStatusValue,
 } from './git.ts'
 export type {
   SubagentAddress, SubagentCatalog, SubagentInterruptReceipt, SubagentListEntry,

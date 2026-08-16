@@ -235,6 +235,17 @@
   white-space: pre;
 }
 
+/* Git change marks: added lines get a green tint (the whole row, gutter
+   included); lines anchoring a deletion get a red tint. The tints stay
+   subtle so the syntax-highlighted text keeps its contrast. */
+.lineAdded {
+  background: var(--dsw-static-green-100);
+}
+
+.lineDeleted {
+  background: var(--dsw-static-red-50);
+}
+
 .gutter {
   flex: none;
   width: 48px;

@@ -1,10 +1,12 @@
 /**
  * Pure parsers for the structured git outputs the tool returns to the model:
- * `git status --porcelain=v1 -b`, `git log --format=…`, and
- * `git branch --format=…`. Each parser is a pure function of the complete
- * stdout the seam retained (PARSE commands fail with `GIT_OUTPUT_OVERFLOW`
- * before a parser ever sees truncated input), so a malformed record is a
- * contract violation and throws rather than silently dropping data.
+ * `git status --porcelain=v1 -b`, `git log --format=…`,
+ * `git branch --format=…`, and the unified diff the GUI viewer turns into
+ * per-line change marks (`parseFileDiff`). Each parser is a pure function of
+ * the complete stdout the seam retained (PARSE commands fail with
+ * `GIT_OUTPUT_OVERFLOW` before a parser ever sees truncated input), so a
+ * malformed record is a contract violation and throws rather than silently
+ * dropping data.
  *
  * @module @deepseek-ai/dsh-tool-git/parse
  */
@@ -67,6 +69,28 @@ export interface BranchInfo {
   behind: number
   /** True when the configured upstream no longer exists (`[gone]`). */
   gone: boolean
+}
+
+/** One record inside a unified-diff hunk (context, added, or deleted line). */
+export interface DiffLine {
+  /** The record class: unchanged context, added to the new file, or deleted from the old file. */
+  type: 'context' | 'added' | 'deleted'
+  /** The line text (without the diff prefix character). */
+  text: string
+}
+
+/** One `@@` hunk of a unified diff with its old/new line ranges. */
+export interface DiffHunk {
+  /** First old-file line number (1-based). */
+  oldStart: number
+  /** Old-file line count (0 = the hunk covers no old lines, e.g. a pure addition). */
+  oldCount: number
+  /** First new-file line number (1-based). */
+  newStart: number
+  /** New-file line count (0 = the hunk covers no new lines, e.g. a pure deletion). */
+  newCount: number
+  /** The records in printed order. */
+  lines: DiffLine[]
 }
 
 /** A malformed porcelain/format record — a git-version or format drift. */
@@ -231,4 +255,55 @@ export function parseBranches(stdout: string): BranchInfo[] {
     })
   }
   return branches
+}
+
+/** The stable `@@ -a,b +c,d @@` hunk header, with the optional counts (`-a +c` means count 1). */
+const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/
+
+/**
+ * Parse the complete stdout of a single-file unified diff (the working tree
+ * vs a baseline like HEAD for one path) into hunks. Metadata lines (`diff
+ * --git`, `index`, `---`/`+++`, rename/mode lines, `Binary files … differ`,
+ * and `\ No newline at end of file`) are skipped; a line that git could not
+ * have produced — a record without a ` ` / `+` / `-` prefix inside a hunk, or
+ * a hunk line outside any hunk — is a format drift and throws.
+ * @param stdout - the complete diff output (empty for a clean or untracked file).
+ * @returns the parsed hunks in printed order.
+ */
+export function parseFileDiff(stdout: string): DiffHunk[] {
+  const hunks: DiffHunk[] = []
+  let current: DiffHunk | undefined
+  for (const line of stdout.split('\n')) {
+    if (line.length === 0) continue
+    if (line.startsWith('@@ ')) {
+      const match = HUNK_HEADER.exec(line)
+      if (match === null) throw malformed('diff', line)
+      current = {
+        oldStart: Number(match[1]),
+        oldCount: match[2] === undefined ? 1 : Number(match[2]),
+        newStart: Number(match[3]),
+        newCount: match[4] === undefined ? 1 : Number(match[4]),
+        lines: [],
+      }
+      hunks.push(current)
+      continue
+    }
+    if (current !== undefined) {
+      // A line inside a hunk must be a record (` `, `+`, or `-` prefix) or
+      // the no-newline marker; anything else is a git version or format drift.
+      const prefix = line.charAt(0)
+      if (prefix === ' ' || prefix === '+' || prefix === '-') {
+        current.lines.push({
+          type: prefix === ' ' ? 'context' : prefix === '+' ? 'added' : 'deleted',
+          text: line.slice(1),
+        })
+        continue
+      }
+      if (line.startsWith('\\ ')) continue
+      throw malformed('diff', line)
+    }
+    // Outside a hunk only metadata lines are legitimate.
+    continue
+  }
+  return hunks
 }

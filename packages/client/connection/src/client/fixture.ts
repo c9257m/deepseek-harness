@@ -2620,6 +2620,28 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           },
         })
       },
+      // Deterministic per-file diff for the viewer's change marks: the staged
+      // note gained a line; the untracked draft has no git baseline.
+      diff: (request) => {
+        if (request.payload.path !== `${FIXTURE_HOME}/Documents/project`) {
+          return err(request, { code: 'git-not-a-repository', message: 'not a git repository', details: {} })
+        }
+        if (request.payload.file.endsWith('/draft.txt')) {
+          return ok(request, { diff: { kind: 'untracked', hunks: [] } })
+        }
+        return ok(request, {
+          diff: {
+            kind: 'tracked',
+            hunks: [{
+              oldStart: 1, oldCount: 1, newStart: 1, newCount: 2,
+              lines: [
+                { type: 'context', text: '# fixture project' },
+                { type: 'added', text: '## Edited' },
+              ],
+            }],
+          },
+        })
+      },
       commit: request => ok(request, {
         commit: { hash: 'f'.repeat(40), shortHash: 'fffffff', subject: request.payload.message },
       }),
@@ -3173,6 +3195,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.writeFile': return this.api.host.writeFile(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'git.status': return this.api.git.status(request, new AbortController().signal)
+      case 'git.diff': return this.api.git.diff(request, new AbortController().signal)
       case 'git.commit': return this.api.git.commit(request)
       case 'git.stage': return this.api.git.stage(request, new AbortController().signal)
       case 'git.unstage': return this.api.git.unstage(request, new AbortController().signal)

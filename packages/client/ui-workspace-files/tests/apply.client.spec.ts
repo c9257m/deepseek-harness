@@ -22,10 +22,13 @@ async function bench() {
   }))
   const readFile = vi.fn(async (_path: string, _signal?: AbortSignal) => 'content')
   const writeFile = vi.fn(async (_path: string, _content: string) => {})
+  const gitDiff = vi.fn(async (_path: string, _file: string, _signal?: AbortSignal) => ({
+    kind: 'tracked' as const, hunks: [],
+  }))
   const enterFileMode = vi.fn()
   const exitFileMode = vi.fn()
   const setFontSize = vi.fn(async (_field: string, _value: unknown) => {})
-  ctx.provide('workspaces', { listDirectory, readFile, writeFile } as never)
+  ctx.provide('workspaces', { listDirectory, readFile, writeFile, gitDiff } as never)
   ctx.provide('layout', { openFileMode: enterFileMode, closeFileMode: exitFileMode } as never)
   // The settings scope transport: bind() returns a canned scope whose snapshot
   // carries the default font size and whose set records the row's write.
@@ -45,7 +48,7 @@ async function bench() {
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
-    ctx, slots: ctx.get('slots') as SlotRegistry, locale, listDirectory, readFile, writeFile,
+    ctx, slots: ctx.get('slots') as SlotRegistry, locale, listDirectory, readFile, writeFile, gitDiff,
     enterFileMode, exitFileMode, setFontSize,
   }
 }
@@ -94,7 +97,7 @@ describe('ui-workspace-files apply', () => {
     expect(b.enterFileMode).toHaveBeenCalledOnce()
   })
 
-  it('routes viewer actions to the read/write wires and the layout mode transition', async () => {
+  it('routes viewer actions to the read/write/diff wires and the layout mode transition', async () => {
     const b = await bench()
     declare(b.slots, 'workspace.fileViewer')
     await b.ctx.plugin({ inject: [...inject], apply }).await()
@@ -105,6 +108,8 @@ describe('ui-workspace-files apply', () => {
     expect(b.readFile).toHaveBeenCalledWith('/workspace/a.ts', signal)
     await viewer.writeFile('/workspace/a.ts', 'edited')
     expect(b.writeFile).toHaveBeenCalledWith('/workspace/a.ts', 'edited')
+    await expect(viewer.gitDiff('/workspace', '/workspace/a.ts', signal)).resolves.toEqual({ kind: 'tracked', hunks: [] })
+    expect(b.gitDiff).toHaveBeenCalledWith('/workspace', '/workspace/a.ts', signal)
     viewer.exitFileMode()
     expect(b.exitFileMode).toHaveBeenCalledOnce()
   })

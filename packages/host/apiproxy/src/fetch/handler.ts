@@ -36,7 +36,7 @@ import {
 } from '../api/host.schema.ts'
 import {
   gitBranchesRequestSchema, gitCheckoutRequestSchema, gitCommitRequestSchema,
-  gitPushPullRequestSchema, gitStageUnstageRequestSchema, gitStatusRequestSchema,
+  gitDiffRequestSchema, gitPushPullRequestSchema, gitStageUnstageRequestSchema, gitStatusRequestSchema,
 } from '../api/git.schema.ts'
 import {
   workspaceArchiveSessionRequestSchema,
@@ -116,6 +116,7 @@ const UNARY_ROUTES: UnaryRoutes = {
   'host.writeFile': { schema: hostWriteFileRequestSchema, invoke: (api, r) => api.host.writeFile(r) },
   'host.openPath': { schema: hostOpenPathRequestSchema, invoke: (api, r, signal) => api.host.openPath(r, signal) },
   'git.status': { schema: gitStatusRequestSchema, invoke: (api, r, signal) => api.git.status(r, signal) },
+  'git.diff': { schema: gitDiffRequestSchema, invoke: (api, r, signal) => api.git.diff(r, signal) },
   'git.commit': { schema: gitCommitRequestSchema, invoke: (api, r) => api.git.commit(r) },
   'git.stage': { schema: gitStageUnstageRequestSchema, invoke: (api, r, signal) => api.git.stage(r, signal) },
   'git.unstage': { schema: gitStageUnstageRequestSchema, invoke: (api, r, signal) => api.git.unstage(r, signal) },

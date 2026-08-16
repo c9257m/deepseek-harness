@@ -6,6 +6,10 @@
  * injected git wire methods; the loaded facts and the interaction draft live
  * in the shared store. A workspace outside a git repository shows a compact
  * "not a git repository" notice instead of the controls.
+ *
+ * Each changed-file row opens that file in the shared file viewer (the owner
+ * share supplies the tree's open gestures): git reports workspace-relative
+ * paths, so the row resolves them against the session cwd before opening.
  */
 import { useEffect, useRef } from 'react'
 import clsx from 'clsx'
@@ -35,6 +39,24 @@ function baseNameOf(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 }
 
+/** Whether a git status path is already absolute (drive letter, UNC, or POSIX root). */
+function looksAbsolute(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
+}
+
+/**
+ * Resolve a git status path — workspace-relative as git reports it, or
+ * already absolute — against the workspace root. The client never joins
+ * path segments for the viewer, but git hands the panel relative paths, so
+ * the row must complete them here; the host resolves the result on its side.
+ * @param root - the session workspace directory.
+ * @param path - the git-reported path.
+ * @returns the absolute path to open.
+ */
+function absoluteOf(root: string, path: string): string {
+  return looksAbsolute(path) ? path : `${root.replace(/[\\/]+$/, '')}/${path}`
+}
+
 /**
  * Render the git quick-action panel.
  * @param props - composed slot props (runtime share + store + injected git methods + locale).
@@ -43,6 +65,7 @@ function baseNameOf(path: string): string {
 export function GitPanel({
   useSessions, useStore, actions,
   gitStatus, gitCommit, gitStage, gitUnstage, gitPush, gitPull, gitBranches, gitCheckout,
+  openFile, enterFileMode,
   t,
 }: GitPanelProps) {
   const sessions = useSessions(s => s)
@@ -286,23 +309,36 @@ export function GitPanel({
                         )}
                       </div>
                       <ul className={css.fileList}>
-                        {entries.slice(0, 20).map(entry => (
-                          <li key={perFile(entry)} className={css.fileRow} title={perFile(entry)}>
-                            <span className={css.fileName}>
-                              {typeof entry === 'string' ? baseNameOf(entry) : `${entry.status} ${baseNameOf(entry.path)}`}
-                            </span>
-                            {key === 'staged' && (
-                              <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { unstage([perFile(entry)]) }}>
-                                {t('git.unstage')}
+                        {entries.slice(0, 20).map((entry) => {
+                          const entryPath = perFile(entry)
+                          return (
+                            <li key={entryPath} className={css.fileRow} title={entryPath}>
+                              <button
+                                type="button"
+                                className={css.fileName}
+                                title={t('git.openFile', { name: baseNameOf(entryPath) })}
+                                onClick={() => {
+                                  // A changed-file row opens like a tree row: the
+                                  // shared viewer store plus the layout transition.
+                                  openFile({ path: absoluteOf(rootPath, entryPath), name: baseNameOf(entryPath) })
+                                  enterFileMode()
+                                }}
+                              >
+                                {typeof entry === 'string' ? baseNameOf(entryPath) : `${entry.status} ${baseNameOf(entryPath)}`}
                               </button>
-                            )}
-                            {(key === 'unstaged' || key === 'untracked') && (
-                              <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { stage([perFile(entry)]) }}>
-                                {t('git.stage')}
-                              </button>
-                            )}
-                          </li>
-                        ))}
+                              {key === 'staged' && (
+                                <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { unstage([entryPath]) }}>
+                                  {t('git.unstage')}
+                                </button>
+                              )}
+                              {(key === 'unstaged' || key === 'untracked') && (
+                                <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { stage([entryPath]) }}>
+                                  {t('git.stage')}
+                                </button>
+                              )}
+                            </li>
+                          )
+                        })}
                         {entries.length > 20 && <li className={css.moreRow}>+{entries.length - 20}</li>}
                       </ul>
                     </div>

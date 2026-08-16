@@ -20,7 +20,7 @@ import {
 } from '../api/host.schema.ts'
 import {
   gitBranchesValueSchema, gitCheckoutValueSchema, gitCommitValueSchema,
-  gitFilesValueSchema, gitOutputValueSchema, gitStatusValueSchema,
+  gitDiffValueSchema, gitFilesValueSchema, gitOutputValueSchema, gitStatusValueSchema,
 } from '../api/git.schema.ts'
 import {
   sessionCancelValueSchema,
@@ -121,6 +121,7 @@ export interface IApiClient {
   }
   git: {
     status(payload: RequestPayload<'git.status'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.status'>>>
+    diff(payload: RequestPayload<'git.diff'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.diff'>>>
     commit(payload: RequestPayload<'git.commit'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.commit'>>>
     stage(payload: RequestPayload<'git.stage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.stage'>>>
     unstage(payload: RequestPayload<'git.unstage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.unstage'>>>
@@ -211,6 +212,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.writeFile': hostWriteFileValueSchema,
   'host.openPath': hostOpenPathValueSchema,
   'git.status': gitStatusValueSchema,
+  'git.diff': gitDiffValueSchema,
   'git.commit': gitCommitValueSchema,
   'git.stage': gitFilesValueSchema,
   'git.unstage': gitFilesValueSchema,
@@ -474,6 +476,7 @@ export abstract class AbstractApiClient implements IApiClient {
 
   readonly git: IApiClient['git'] = {
     status: (payload, signal) => this.callUnary('git.status', payload, signal),
+    diff: (payload, signal) => this.callUnary('git.diff', payload, signal),
     commit: (payload, signal) => this.callUnary('git.commit', payload, signal),
     stage: (payload, signal) => this.callUnary('git.stage', payload, signal),
     unstage: (payload, signal) => this.callUnary('git.unstage', payload, signal),

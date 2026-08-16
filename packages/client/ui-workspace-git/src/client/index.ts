@@ -2,8 +2,9 @@
  * Workspace git quick-action panel plugin, browser half: registers the panel
  * into the workspace file tree's declared `sidebar.files.git` child hole
  * (rendered beneath the tree). The panel derives the workspace path from the
- * standard sessions feed and calls the workspaces service's git methods
- * through the injected share; no layout or settings coupling.
+ * standard sessions feed, calls the workspaces service's git methods through
+ * the injected share, and uses the tree's open-file owner props so a
+ * changed-file row opens in the shared viewer; no layout or settings coupling.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale) and the

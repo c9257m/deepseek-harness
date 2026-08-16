@@ -72,6 +72,36 @@ export interface GitOutputValue {
   output: string
 }
 
+/** One record inside a unified-diff hunk (context, added, or deleted line). */
+export interface GitDiffLine {
+  /** The record class: unchanged context, added to the new file, or deleted from the old file. */
+  type: 'context' | 'added' | 'deleted'
+  /** The line text (without the diff prefix character). */
+  text: string
+}
+
+/** One `@@` hunk of a unified diff with its old/new line ranges. */
+export interface GitDiffHunk {
+  /** First old-file line number (1-based). */
+  oldStart: number
+  /** Old-file line count (0 = the hunk covers no old lines, e.g. a pure addition). */
+  oldCount: number
+  /** First new-file line number (1-based). */
+  newStart: number
+  /** New-file line count (0 = the hunk covers no new lines, e.g. a pure deletion). */
+  newCount: number
+  /** The records in printed order. */
+  lines: GitDiffLine[]
+}
+
+/** The parsed working-tree-vs-HEAD diff of one workspace file. */
+export interface GitFileDiff {
+  /** 'tracked' when the file has a git baseline; 'untracked' when every line is new (no baseline). */
+  kind: 'tracked' | 'untracked'
+  /** The parsed hunks (empty when clean or untracked). */
+  hunks: GitDiffHunk[]
+}
+
 /** Host-level git operations over one workspace directory. */
 export interface GitApi {
   /**
@@ -82,6 +112,17 @@ export interface GitApi {
     request: RpcRequest<{ path: string }>,
     signal: AbortSignal,
   ): Promise<RpcResponse<{ status: GitStatusValue }>>
+
+  /**
+   * The working-tree-vs-HEAD diff of one file inside the workspace, parsed
+   * into hunks so the viewer can mark added and deleted lines. `git diff
+   * HEAD` combines the staged and unstaged changes; an untracked file (or a
+   * repo with no commits) yields `kind: 'untracked'` with empty hunks.
+   */
+  diff(
+    request: RpcRequest<{ path: string; file: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<{ diff: GitFileDiff }>>
 
   /**
    * Stage every change and commit it with the given message — the GUI panel's

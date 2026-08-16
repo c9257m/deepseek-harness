@@ -5,12 +5,13 @@
  * highlights code per language with an optional line-number gutter, maps Host
  * business codes onto localized error copy, and the tab/body context menus
  * close tabs and toggle the display preferences. Closing the last tab exits
- * file mode.
+ * file mode. Files inside a git workspace carry per-line change marks fetched
+ * from the injected `gitDiff` (added lines green, deletion anchors red).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
-import type { WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
+import type { GitFileDiff, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { FileViewerProps } from '../src/client/contract/slots.ts'
@@ -31,6 +32,16 @@ const workspaceState: WorkspaceListState = {
   baselinesReady: true, recentWorkspaceId: undefined,
 }
 
+function sessionHook(cwd: string | null) {
+  const snapshot = {
+    ids: cwd === null ? [] : ['s1'],
+    byId: cwd === null ? {} : { s1: { id: 's1', cwd } },
+    current: cwd === null ? undefined : 's1',
+    phase: 'ready' as const,
+  }
+  return (selector: (state: typeof snapshot) => unknown): unknown => selector(snapshot)
+}
+
 /** A FileReadError-shaped rejection carrying the Host business code. */
 function rpcFailure(code: string): Error {
   const error = new Error(code)
@@ -38,18 +49,44 @@ function rpcFailure(code: string): Error {
   return error
 }
 
-function mount(overrides: Partial<FileViewerProps> = {}) {
+/** The working-tree diff of one modified line in a two-line file. */
+const ONE_ADDED: GitFileDiff = {
+  kind: 'tracked',
+  hunks: [{
+    oldStart: 1, oldCount: 1, newStart: 1, newCount: 2,
+    lines: [
+      { type: 'context', text: 'keep' },
+      { type: 'added', text: 'new line' },
+    ],
+  }],
+}
+
+/** A diff that deletes the final two lines of a four-line file (EOF anchor). */
+const EOF_DELETED: GitFileDiff = {
+  kind: 'tracked',
+  hunks: [{
+    oldStart: 3, oldCount: 2, newStart: 3, newCount: 0,
+    lines: [
+      { type: 'deleted', text: 'gone 1' },
+      { type: 'deleted', text: 'gone 2' },
+    ],
+  }],
+}
+
+function mount(overrides: Partial<FileViewerProps> = {}, cwd: string | null = '/workspace') {
   const store = createFileBrowserStore().create()
   const readFile = vi.fn(async (path: string) => path.endsWith('.ts') ? 'const answer: number = 42' : 'hello world')
   const writeFile = vi.fn(async () => {})
+  const gitDiff = vi.fn(async () => ({ kind: 'tracked' as const, hunks: [] }))
   const exitFileMode = vi.fn()
   const props: FileViewerProps = {
-    useSessions: hook({} as never),
+    useSessions: sessionHook(cwd) as never,
     useWorkspaces: hook(workspaceState),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     readFile,
     writeFile,
+    gitDiff,
     exitFileMode,
     useGrammarLoaded: sel => sel(0),
     t,
@@ -57,7 +94,8 @@ function mount(overrides: Partial<FileViewerProps> = {}) {
   }
   const utils = render(<FileViewer {...props} />)
   return {
-    store, readFile: props.readFile, writeFile: props.writeFile,
+    store,
+    readFile: props.readFile, writeFile: props.writeFile, gitDiff: props.gitDiff,
     exitFileMode: props.exitFileMode, ...utils,
   }
 }
@@ -262,6 +300,103 @@ describe('FileViewer', () => {
       await act(async () => {})
       expect(screen.queryByText(/保存失败/)).toBeNull()
       expect(writeFile).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks added lines green and deletion anchors red, fetched once per file', async () => {
+    const { store, container, gitDiff } = mount({
+      readFile: vi.fn(async () => 'keep\nnew line\n'),
+      gitDiff: vi.fn(async () => ONE_ADDED),
+    })
+    act(() => { store.actions.openFile({ path: '/a.txt', name: 'a.txt' }) })
+    await act(async () => {})
+    expect(screen.getByText('new line')).toBeTruthy()
+    expect(gitDiff).toHaveBeenCalledWith('/workspace', '/a.txt')
+    // Line 1 is context (no tint); line 2 is the added line (green tint).
+    const added = () => container.querySelectorAll('[class*="lineAdded"]')
+    expect(added()).toHaveLength(1)
+    expect(added()[0]!.textContent).toContain('new line')
+    // The added line's tooltip names the change class.
+    expect(container.querySelector('[class*="lineAdded"]')?.getAttribute('title')).toBe('该行相对上次提交是新增的')
+    // No deletion anchors exist.
+    expect(container.querySelectorAll('[class*="lineDeleted"]')).toHaveLength(0)
+    // Each file's diff is fetched once: b.txt fetches its own, switching back
+    // to a.txt does not refetch a.txt.
+    act(() => { store.actions.openFile({ path: '/b.txt', name: 'b.txt' }) })
+    await act(async () => {})
+    expect(screen.getByRole('tab', { name: /b\.txt/ }).getAttribute('aria-selected')).toBe('true')
+    expect(gitDiff).toHaveBeenCalledTimes(2)
+    act(() => { fireEvent.click(screen.getByRole('tab', { name: /a\.txt/ })) })
+    await act(async () => {})
+    expect(gitDiff).toHaveBeenCalledTimes(2)
+  })
+
+  it('marks the line before an EOF deletion with the red tint and the deleted count tooltip', async () => {
+    const { store, container } = mount({
+      readFile: vi.fn(async () => 'a\nb\nc\nd\n'),
+      gitDiff: vi.fn(async () => EOF_DELETED),
+    })
+    act(() => { store.actions.openFile({ path: '/eof.txt', name: 'eof.txt' }) })
+    await screen.findByText('d')
+    const deleted = () => container.querySelectorAll('[class*="lineDeleted"]')
+    await waitFor(() => { expect(deleted()).toHaveLength(1) })
+    // The deletion anchors on line 2 (the line before the removed hunk).
+    expect(deleted()[0]!.textContent).toContain('b')
+    expect(deleted()[0]!.getAttribute('title')).toBe('此处相对上次提交删除了 2 行')
+  })
+
+  it('tints every line of an untracked file as added', async () => {
+    const { store, container } = mount({
+      readFile: vi.fn(async () => 'one\ntwo\n'),
+      gitDiff: vi.fn(async () => ({ kind: 'untracked' as const, hunks: [] })),
+    })
+    act(() => { store.actions.openFile({ path: '/new.txt', name: 'new.txt' }) })
+    await screen.findByText('one')
+    const added = () => container.querySelectorAll('[class*="lineAdded"]')
+    await waitFor(() => { expect(added()).toHaveLength(2) })
+    expect(added()[0]!.getAttribute('title')).toBe('该文件尚未被 git 跟踪')
+  })
+
+  it('leaves the body unmarked when the diff fetch fails and fetches no diff without a session', async () => {
+    const { store, container, gitDiff } = mount({
+      readFile: vi.fn(async () => 'one\ntwo\n'),
+      gitDiff: vi.fn(async () => { throw new Error('git operation failed: git-failed: boom') }),
+    })
+    act(() => { store.actions.openFile({ path: '/a.txt', name: 'a.txt' }) })
+    await screen.findByText('one')
+    await waitFor(() => { expect(gitDiff).toHaveBeenCalled() })
+    expect(container.querySelectorAll('[class*="lineAdded"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[class*="lineDeleted"]')).toHaveLength(0)
+
+    // No current session: no workspace root, so no diff is fetched at all.
+    const noSession = mount({ readFile: vi.fn(async () => 'one\n') }, null)
+    act(() => { noSession.store.actions.openFile({ path: '/a.txt', name: 'a.txt' }) })
+    await noSession.findByText('one')
+    expect(noSession.gitDiff).not.toHaveBeenCalled()
+  })
+
+  it('re-fetches the diff marks after a successful save', async () => {
+    vi.useFakeTimers()
+    try {
+      const { store, container, gitDiff } = mount({
+        readFile: vi.fn(async () => 'keep\nnew line\n'),
+        gitDiff: vi.fn(async () => ONE_ADDED),
+      })
+      act(() => { store.actions.openFile({ path: '/a.txt', name: 'a.txt' }) })
+      await act(async () => {})
+      expect(gitDiff).toHaveBeenCalledTimes(1)
+      expect(container.querySelectorAll('[class*="lineAdded"]')).toHaveLength(1)
+      // Edit and save: the save invalidates the fetched diff, so the effect
+      // re-fetches it against the new content.
+      fireEvent.click(screen.getByRole('button', { name: /编辑/ }))
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'keep\n' } })
+      act(() => { vi.advanceTimersByTime(1000) })
+      await act(async () => {})
+      await act(async () => {})
+      expect(gitDiff).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('button', { name: /完成/ })).toBeTruthy()
     } finally {
       vi.useRealTimers()
     }

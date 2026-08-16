@@ -2,8 +2,9 @@
  * ui-workspace-git contract: the panel fills the workspace file tree's
  * declared `sidebar.files.git` child hole, rendered beneath the tree. The
  * parent (ui-workspace-files' FileTree) decides where the hole renders and
- * passes no owner props; the panel derives the workspace path from the
- * standard sessions feed and calls the injected git wire methods.
+ * passes its open-file gestures as owner props (a changed-file row opens in
+ * the shared viewer); the panel derives the workspace path from the standard
+ * sessions feed and calls the injected git wire methods.
  */
 import type {
   GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,

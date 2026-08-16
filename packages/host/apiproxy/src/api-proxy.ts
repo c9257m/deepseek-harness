@@ -3048,6 +3048,19 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async diff(request, signal) {
+        try {
+          return ok(request, {
+            diff: await ctx.workspaceGit.diff(request.payload.path, request.payload.file, signal),
+          })
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git diff was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
       async commit(request) {
         try {
           return ok(request, { commit: await ctx.workspaceGit.commit(request.payload.path, request.payload.message) })

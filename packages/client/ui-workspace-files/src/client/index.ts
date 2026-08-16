@@ -84,6 +84,7 @@ export function apply(ctx: ClientContext): void {
     const viewerInjected = (): FileViewerInjected => ({
       readFile: (path, signal) => ctx.workspaces.readFile(path, signal),
       writeFile: (path, content) => ctx.workspaces.writeFile(path, content),
+      gitDiff: (path, file, signal) => ctx.workspaces.gitDiff(path, file, signal),
       exitFileMode: () => { ctx.layout.closeFileMode() },
       hooks: { grammarLoaded: grammarLoadedSource },
     })

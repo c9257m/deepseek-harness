@@ -1,7 +1,7 @@
 /** Test-owned workspaces face: the renderer standard-kit observable plus recorded actions. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  DirectoryListing, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  DirectoryListing, GitBranchValue, GitCommitValue, GitFileDiff, GitOutputValue, GitStatusValue,
   IWorkspaces, SessionId, SnapshotStore, WorkspaceId, WorkspaceListState, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { workspaceListState } from './fixtures.ts'
@@ -183,6 +183,16 @@ export class TestWorkspaces implements IWorkspaces {
     const stub = this.stubs.get('gitStatus')
     if (stub !== undefined) return await (stub(path, signal) as Promise<GitStatusValue>)
     return { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true }
+  }
+
+  /**
+   * Git per-file diff (recorded). The default serves a clean tracked file.
+   */
+  async gitDiff(path: string, file: string, signal?: AbortSignal): Promise<GitFileDiff> {
+    this.calls.push({ method: 'gitDiff', args: [path, file, signal] })
+    const stub = this.stubs.get('gitDiff')
+    if (stub !== undefined) return await (stub(path, file, signal) as Promise<GitFileDiff>)
+    return { kind: 'tracked', hunks: [] }
   }
 
   /**

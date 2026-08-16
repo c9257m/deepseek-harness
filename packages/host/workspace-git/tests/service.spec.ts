@@ -128,6 +128,58 @@ describe('workspace-git service over the real git binary', () => {
     })
   })
 
+  it('reports an untracked file and a no-commit repo as untracked diffs', async () => {
+    await writeFile(join(repo, 'a.txt'), 'one\n')
+    // No HEAD yet: every path is new.
+    const unborn = await git.diff(repo, 'a.txt')
+    expect(unborn).toEqual({ kind: 'untracked', hunks: [] })
+
+    await git.commit(repo, 'base')
+    // After the commit, a.txt is tracked and clean; b.txt stays untracked.
+    const clean = await git.diff(repo, 'a.txt')
+    expect(clean).toEqual({ kind: 'tracked', hunks: [] })
+    const untracked = await git.diff(repo, 'b.txt')
+    expect(untracked).toEqual({ kind: 'untracked', hunks: [] })
+  })
+
+  it('parses the working-tree diff of a modified tracked file', async () => {
+    await writeFile(join(repo, 'a.txt'), 'one\ntwo\nthree\n')
+    await git.commit(repo, 'base')
+    await writeFile(join(repo, 'a.txt'), 'one\ntwo edited\nthree\nfour\n')
+
+    const diff = await git.diff(repo, 'a.txt')
+    expect(diff.kind).toBe('tracked')
+    expect(diff.hunks.length).toBeGreaterThan(0)
+    const records = diff.hunks.flatMap(hunk => hunk.lines)
+    expect(records).toContainEqual({ type: 'deleted', text: 'two' })
+    expect(records).toContainEqual({ type: 'added', text: 'two edited' })
+    expect(records).toContainEqual({ type: 'added', text: 'four' })
+  })
+
+  it('combines staged and unstaged changes against HEAD', async () => {
+    await writeFile(join(repo, 'a.txt'), 'one\n')
+    await git.commit(repo, 'base')
+    // A staged edit plus a further unstaged edit on the same file.
+    await writeFile(join(repo, 'a.txt'), 'staged\nunstaged\n')
+    setupGit(repo, 'add', 'a.txt')
+    await writeFile(join(repo, 'a.txt'), 'staged\nunstaged edited\n')
+
+    const diff = await git.diff(repo, join(repo, 'a.txt'))
+    const added = diff.hunks.flatMap(hunk => hunk.lines).filter(line => line.type === 'added').map(line => line.text)
+    expect(added).toContain('staged')
+    expect(added).toContain('unstaged edited')
+  })
+
+  it('rejects a blank file path and a file outside the workspace', async () => {
+    await expect(git.diff(repo, '   ')).rejects.toMatchObject({ code: 'GIT_FAILED' })
+    const outside = join(root, 'outside.txt')
+    await writeFile(outside, 'x\n')
+    await expect(git.diff(repo, outside)).rejects.toMatchObject({
+      code: 'GIT_FAILED',
+      message: `cannot diff "${outside}": not inside the workspace "${repo}"`,
+    })
+  })
+
   it('lists branches and checks out another one', async () => {
     await writeFile(join(repo, 'a.txt'), 'one\n')
     await git.commit(repo, 'base')

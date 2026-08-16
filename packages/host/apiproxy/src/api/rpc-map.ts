@@ -47,6 +47,7 @@ export interface RpcMethodMap {
   'host.writeFile': HostApi['writeFile']
   'host.openPath': HostApi['openPath']
   'git.status': GitApi['status']
+  'git.diff': GitApi['diff']
   'git.commit': GitApi['commit']
   'git.stage': GitApi['stage']
   'git.unstage': GitApi['unstage']

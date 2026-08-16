@@ -7,7 +7,7 @@
 
 export type {
   ApiProxy, SessionsApi, SessionSearchItem, SessionSummary, PromptContentPart, HostApi, GitApi,
-  GitBranchValue, GitCommitValue, GitFileStatus, GitOutputValue, GitStatusValue,
+  GitBranchValue, GitCommitValue, GitDiffHunk, GitDiffLine, GitFileDiff, GitFileStatus, GitOutputValue, GitStatusValue,
   EventsApi, MuxFrame, HostFrame,
   ApprovalResponsePayload, QuestionResponsePayload, HistoryEntry, ToolEventView,
   DirectoryEntry, DirectoryListing,

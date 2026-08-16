@@ -36,8 +36,8 @@ export { GitError, runGit } from './run.ts'
 export type { GitErrorCode, GitRunBounds, GitRunRequest, GitRunResult } from './run.ts'
 export { LOG_FORMAT, buildGitArgv, parsesStdout, validateGitArgs } from './commands.ts'
 export type { GitRequest, GitToolArgs } from './commands.ts'
-export { parseBranches, parseLog, parseStatus } from './parse.ts'
-export type { BranchInfo, LogCommit, StatusFile, StatusInfo } from './parse.ts'
+export { parseBranches, parseFileDiff, parseLog, parseStatus } from './parse.ts'
+export type { BranchInfo, DiffHunk, DiffLine, LogCommit, StatusFile, StatusInfo } from './parse.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-git'

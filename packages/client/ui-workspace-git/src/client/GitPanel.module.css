@@ -188,11 +188,26 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* The file name is a button that opens the file in the shared viewer. */
 .fileName {
   min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.fileName:hover {
+  color: var(--dsw-alias-accent-primary);
 }
 
 .rowButton {

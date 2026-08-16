@@ -170,6 +170,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async status(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true } } } }
       },
+      async diff(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { diff: { kind: 'tracked', hunks: [] } } } }
+      },
       async commit(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: request.payload.message } } } }
       },

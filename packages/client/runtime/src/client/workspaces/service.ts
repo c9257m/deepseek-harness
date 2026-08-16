@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  DirectoryListing, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  DirectoryListing, GitBranchValue, GitCommitValue, GitFileDiff, GitOutputValue, GitStatusValue,
   IApiClient, RpcError,
   SessionId, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
@@ -308,6 +308,19 @@ export class WorkspaceRuntime implements IWorkspaces {
     const response = await this.api.git.status({ path }, signal)
     if (!response.result.ok) throw new GitOperationError(response.result.error)
     return response.result.value.status
+  }
+
+  /**
+   * The working-tree-vs-HEAD diff of one file inside the workspace, parsed
+   * into hunks so the viewer can mark added and deleted lines.
+   * @param path - absolute workspace directory.
+   * @param file - workspace-relative or absolute file path inside `path`.
+   * @param signal - aborts the wire request when the caller supersedes it.
+   */
+  async gitDiff(path: string, file: string, signal?: AbortSignal): Promise<GitFileDiff> {
+    const response = await this.api.git.diff({ path, file }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.diff
   }
 
   /**

@@ -68,6 +68,7 @@ async function harness(
     fileBrowser?: { list?: unknown; createDirectory?: unknown; readFile?: unknown }
     workspaceGit?: {
       status?: unknown
+      diff?: unknown
       commit?: unknown
       stage?: unknown
       unstage?: unknown
@@ -120,6 +121,7 @@ async function harness(
   // Structural git-service fake: the git RPCs serve ctx.workspaceGit directly.
   ctx.provide('workspaceGit', {
     status: extras.workspaceGit?.status ?? (async () => { throw new Error('unexpected status') }),
+    diff: extras.workspaceGit?.diff ?? (async () => { throw new Error('unexpected diff') }),
     commit: extras.workspaceGit?.commit ?? (async () => { throw new Error('unexpected commit') }),
     stage: extras.workspaceGit?.stage ?? (async () => { throw new Error('unexpected stage') }),
     unstage: extras.workspaceGit?.unstage ?? (async () => { throw new Error('unexpected unstage') }),
@@ -674,10 +676,14 @@ describe('git.*', () => {
     staged: [], unstaged: [], untracked: [], conflicted: [], clean: true,
   }
 
-  it('serves status, commit, push, pull, branches, and checkout through the workspace-git service', async () => {
+  it('serves status, diff, commit, push, pull, branches, and checkout through the workspace-git service', async () => {
     const { api } = await harness(undefined, undefined, {
       workspaceGit: {
         status: async () => ({ ...CLEAN_STATUS }),
+        diff: async () => ({
+          kind: 'tracked',
+          hunks: [{ oldStart: 1, oldCount: 1, newStart: 1, newCount: 1, lines: [{ type: 'added', text: 'x' }] }],
+        }),
         commit: async (_path: string, message: string) => ({ hash: 'h'.repeat(40), shortHash: 'hhhhhhh', subject: message }),
         stage: async (_path: string, files: readonly string[]) => ({ files: [...files] }),
         unstage: async (_path: string, files: readonly string[]) => ({ files: [...files] }),
@@ -689,6 +695,8 @@ describe('git.*', () => {
     })
     expect((await api.git.status(request({ path: '/w' }), new AbortController().signal)).result)
       .toEqual({ ok: true, value: { status: CLEAN_STATUS } })
+    expect((await api.git.diff(request({ path: '/w', file: '/w/a.ts' }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { diff: { kind: 'tracked', hunks: [{ oldStart: 1, oldCount: 1, newStart: 1, newCount: 1, lines: [{ type: 'added', text: 'x' }] }] } } })
     expect((await api.git.commit(request({ path: '/w', message: 'fix it' }))).result)
       .toEqual({ ok: true, value: { commit: { hash: 'h'.repeat(40), shortHash: 'hhhhhhh', subject: 'fix it' } } })
     expect((await api.git.stage(request({ path: '/w', files: ['a.ts'] }), new AbortController().signal)).result)
@@ -709,6 +717,7 @@ describe('git.*', () => {
     const { api } = await harness(undefined, undefined, {
       workspaceGit: {
         status: async () => { throw new GitError('not a git repository', 'GIT_NOT_A_REPOSITORY') },
+        diff: async () => { throw new GitError('git command failed (exit 128)', 'GIT_FAILED') },
         commit: async () => { throw new GitError('git command failed (exit 128)', 'GIT_FAILED') },
         stage: async () => { throw new GitError('git command failed (exit 128)', 'GIT_FAILED') },
         unstage: async () => { throw new GitError('git command was aborted', 'GIT_ABORTED') },
@@ -720,6 +729,8 @@ describe('git.*', () => {
     })
     expect((await api.git.status(request({ path: '/w' }), new AbortController().signal)).result)
       .toMatchObject({ ok: false, error: { code: 'git-not-a-repository' } })
+    expect((await api.git.diff(request({ path: '/w', file: 'a.ts' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-failed' } })
     expect((await api.git.commit(request({ path: '/w', message: 'x' }))).result)
       .toMatchObject({ ok: false, error: { code: 'git-failed' } })
     expect((await api.git.stage(request({ path: '/w', files: ['x'] }), new AbortController().signal)).result)

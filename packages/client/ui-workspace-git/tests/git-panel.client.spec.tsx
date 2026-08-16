@@ -2,7 +2,8 @@
 /**
  * GitPanel behavior: shows the branch/status summary, the changed-file
  * buckets, stages-all-and-commits through the injected wire, pushes/pulls,
- * switches branches, and degrades to the not-a-repository notice. The spec
+ * switches branches, opens a changed file in the shared viewer through the
+ * owner gestures, and degrades to the not-a-repository notice. The spec
  * asserts user-visible behavior with driven props (store + injected fakes).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -65,6 +66,8 @@ function mount(overrides: Partial<GitPanelInjected> = {}, cwd: string | null = '
   const gitPush = vi.fn(async () => ({ output: 'Everything up-to-date' }))
   const gitPull = vi.fn(async () => ({ output: 'Already up to date.' }))
   const gitCheckout = vi.fn(async (_path: string, branch: string) => branch)
+  const openFile = vi.fn()
+  const enterFileMode = vi.fn()
   const props: GitPanelProps = {
     useSessions: sessionHook(cwd) as never,
     useWorkspaces: (() => ({})) as never,
@@ -78,6 +81,8 @@ function mount(overrides: Partial<GitPanelInjected> = {}, cwd: string | null = '
     gitPull: overrides.gitPull ?? gitPull,
     gitBranches: overrides.gitBranches ?? gitBranches,
     gitCheckout: overrides.gitCheckout ?? gitCheckout,
+    openFile,
+    enterFileMode,
     t,
   }
   const utils = render(<GitPanel {...props} />)
@@ -92,6 +97,8 @@ function mount(overrides: Partial<GitPanelInjected> = {}, cwd: string | null = '
     gitPush: mocked(overrides.gitPush ?? gitPush),
     gitPull: mocked(overrides.gitPull ?? gitPull),
     gitCheckout: mocked(overrides.gitCheckout ?? gitCheckout),
+    openFile,
+    enterFileMode,
     ...utils,
   }
 }
@@ -193,6 +200,26 @@ describe('GitPanel', () => {
     fireEvent.click(within(screen.getByTitle('/w/a.ts').closest('div') as HTMLElement)
       .getByRole('button', { name: '全部取消暂存' }))
     await waitFor(() => { expect(gitUnstage).toHaveBeenCalledWith('/w', ['/w/a.ts'], expect.any(AbortSignal)) })
+  })
+
+  it('opens a changed file in the shared viewer when its row is clicked', async () => {
+    const { openFile, enterFileMode } = mount()
+    await screen.findByTitle('main')
+    fireEvent.click(screen.getByText('M a.ts'))
+    expect(openFile).toHaveBeenCalledWith({ path: '/w/a.ts', name: 'a.ts' })
+    expect(enterFileMode).toHaveBeenCalledOnce()
+  })
+
+  it('resolves workspace-relative git paths against the session cwd before opening', async () => {
+    const { openFile } = mount({
+      gitStatus: vi.fn(async () => ({
+        branch: 'main', upstream: null, ahead: 0, behind: 0,
+        staged: [], unstaged: [{ path: 'src/b.ts', status: 'M' }], untracked: [], conflicted: [], clean: false,
+      })),
+    })
+    await screen.findByText('M b.ts')
+    fireEvent.click(screen.getByText('M b.ts'))
+    expect(openFile).toHaveBeenCalledWith({ path: '/w/src/b.ts', name: 'b.ts' })
   })
 
   it('pushes and pulls through the wire, showing the acknowledgement', async () => {

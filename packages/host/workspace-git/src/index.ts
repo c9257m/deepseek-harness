@@ -1,13 +1,14 @@
 /**
  * GUI git-operations service: `ctx.workspaceGit` runs git commands in a
- * workspace directory for the browser's quick-action panel — status,
- * stage-all-and-commit, push, pull, branch listing, and branch checkout —
- * spawning the SYSTEM git binary through the `ctx.subprocess` seam with the
- * same fixed invocation and credential-prompt pin the model-facing git tool
- * uses, and reusing that package's pure parsers (`parseStatus`, `parseLog`,
- * `parseBranches`) and error vocabulary (`GitError`). The browser never
- * receives raw porcelain or a shell: every method returns the parsed wire
- * value or a typed `GitError` the API gateway maps onto a stable error code.
+ * workspace directory for the browser's quick-action panel — status, per-file
+ * diff parsing, stage-all-and-commit, push, pull, branch listing, and branch
+ * checkout — spawning the SYSTEM git binary through the `ctx.subprocess` seam
+ * with the same fixed invocation and credential-prompt pin the model-facing
+ * git tool uses, and reusing that package's pure parsers (`parseStatus`,
+ * `parseFileDiff`, `parseLog`, `parseBranches`) and error vocabulary
+ * (`GitError`). The browser never receives raw porcelain or a shell: every
+ * method returns the parsed wire value or a typed `GitError` the API gateway
+ * maps onto a stable error code.
  *
  * Policy decisions mirror the git tool: unconfined spawn (deployment policy
  * belongs to the tool/permission seams, not this service), `GIT_TERMINAL_PROMPT=0`
@@ -19,12 +20,12 @@
  * @module @deepseek-ai/dsh-host-workspace-git
  */
 
-import { resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { GitError, LOG_FORMAT, parseBranches, parseLog, parseStatus } from '@deepseek-ai/dsh-tool-git'
-import type { BranchInfo, StatusInfo, StatusFile } from '@deepseek-ai/dsh-tool-git'
+import { GitError, LOG_FORMAT, parseBranches, parseFileDiff, parseLog, parseStatus } from '@deepseek-ai/dsh-tool-git'
+import type { BranchInfo, DiffHunk, StatusInfo, StatusFile } from '@deepseek-ai/dsh-tool-git'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputRead, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 
 declare module '@deepseek-ai/cordis' {
@@ -60,6 +61,19 @@ export interface GitBranchValue extends BranchInfo {}
 export interface GitOutputValue {
   /** Combined stdout and stderr text (git reports progress on either stream). */
   output: string
+}
+
+/** The diff of one workspace file against its HEAD baseline. */
+export interface GitFileDiffValue {
+  /**
+   * 'tracked' when the file has a git baseline (a clean tracked file carries
+   * empty hunks); 'untracked' when git has no baseline for the file (a
+   * no-commit repo, an ignored-but-present file, or a genuinely new file —
+   * every line is new relative to the baseline).
+   */
+  kind: 'tracked' | 'untracked'
+  /** The parsed working-tree-vs-HEAD hunks (empty when clean or untracked). */
+  hunks: DiffHunk[]
 }
 
 /** Validated plugin configuration. */
@@ -293,6 +307,55 @@ export default class WorkspaceGit extends Service {
       clean: parsed.staged.length === 0 && parsed.unstaged.length === 0
         && parsed.untracked.length === 0 && parsed.conflicted.length === 0,
     }
+  }
+
+  /**
+   * The working-tree-vs-HEAD diff of one workspace file, parsed into hunks so
+   * the viewer can mark added and deleted lines. `git diff HEAD` combines the
+   * staged and unstaged changes; an untracked file (no git baseline) yields
+   * `kind: 'untracked'` with empty hunks, and a repo without any commit yet
+   * treats every path as untracked. The file path is workspace-relative (as
+   * `status` reports it) or an absolute path inside the workspace.
+   * @param path - fully-qualified workspace directory.
+   * @param file - workspace-relative or absolute file path inside `path`.
+   * @param signal - caller lifetime.
+   * @returns the parsed diff (kind + hunks).
+   */
+  async diff(path: string, file: string, signal?: AbortSignal): Promise<GitFileDiffValue> {
+    if (file.trim().length === 0) {
+      throw new GitError('diff needs a file path', 'GIT_FAILED')
+    }
+    const cwd = this.resolveWorkspace(path)
+    // A relative path is workspace-relative (as `status` reports it); an
+    // absolute path must still land inside the workspace.
+    const abs = isAbsolute(file) ? file : resolve(cwd, file)
+    const rel = relative(cwd, abs)
+    if (rel.length === 0 || rel.startsWith('..') || isAbsolute(rel)) {
+      throw new GitError(`cannot diff "${file}": not inside the workspace "${path}"`, 'GIT_FAILED')
+    }
+    // git pathspecs use forward slashes on every platform; backslashes would
+    // be treated as literal characters on Windows.
+    const spec = rel.split('\\').join('/')
+    let result: GitRunResult
+    try {
+      result = await this.run(cwd, ['diff', 'HEAD', '--no-ext-diff', '--', spec], signal)
+    } catch (error: unknown) {
+      // A repository with no commits has no HEAD to diff against; every path
+      // in it is new relative to the empty baseline.
+      if (error instanceof GitError && error.code === 'GIT_FAILED'
+        && /unknown revision|does not have any commits|bad revision/i.test(error.message)) {
+        return { kind: 'untracked', hunks: [] }
+      }
+      throw error
+    }
+    const hunks = parseFileDiff(result.stdout)
+    if (hunks.length > 0) return { kind: 'tracked', hunks }
+    // An empty diff means either a clean tracked file or an untracked one
+    // (git excludes untracked paths from diff output) — ask the index.
+    const tracked = await this.run(cwd, ['ls-files', '--', spec], signal)
+    return tracked.stdout.trim().length === 0
+      ? { kind: 'untracked', hunks: [] }
+      : { kind: 'tracked', hunks: [] }
   }
 
   /**

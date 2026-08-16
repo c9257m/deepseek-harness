@@ -29,6 +29,9 @@ export const zh = {
   'viewer.save.error': '保存失败：{message}',
   'viewer.save.retry': '重试',
   'viewer.unsaved': '有未保存的修改',
+  'viewer.diff.added': '该行相对上次提交是新增的',
+  'viewer.diff.deleted': '此处相对上次提交删除了 {n} 行',
+  'viewer.diff.untracked': '该文件尚未被 git 跟踪',
 } satisfies Record<string, string>
 
 /** The workspace-files namespace key union. */
@@ -63,4 +66,7 @@ export const en = {
   'viewer.save.error': 'Save failed: {message}',
   'viewer.save.retry': 'Retry',
   'viewer.unsaved': 'Unsaved changes',
+  'viewer.diff.added': 'This line was added since the last commit',
+  'viewer.diff.deleted': '{n} lines were deleted here since the last commit',
+  'viewer.diff.untracked': 'This file is not tracked by git',
 } satisfies Record<WorkspaceFilesKey, string>

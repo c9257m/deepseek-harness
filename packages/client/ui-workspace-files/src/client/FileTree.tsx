@@ -147,8 +147,9 @@ export function FileTree({ wide, useSessions, actions, listDirectory, enterFileM
         )}
       </div>
       {/* The git quick-action panel renders beneath the tree whenever a
-          composition registers into the declared child hole. */}
-      {renderSlot('sidebar.files.git', {})}
+          composition registers into the declared child hole; it reuses the
+          tree's open gestures so a changed-file row opens in the viewer. */}
+      {renderSlot('sidebar.files.git', { openFile: actions.openFile, enterFileMode })}
     </div>
   )
 }

@@ -13,6 +13,7 @@ import {
 import type { GitRequest, GitToolArgs } from '@deepseek-ai/dsh-tool-git'
 import {
   parseBranches,
+  parseFileDiff,
   parseLog,
   parseStatus,
 } from '@deepseek-ai/dsh-tool-git'
@@ -276,5 +277,95 @@ describe('parseBranches', () => {
 
   it('rejects a malformed record', () => {
     expect(() => parseBranches('main\0\n')).toThrow(/could not parse git branch/)
+  })
+})
+
+describe('parseFileDiff', () => {
+  const FULL = [
+    'diff --git a/src/a.ts b/src/a.ts',
+    'index 1111111..2222222 100644',
+    '--- a/src/a.ts',
+    '+++ b/src/a.ts',
+    '@@ -1,3 +1,4 @@',
+    ' keep',
+    '-drop this line',
+    '+added line',
+    ' keep',
+  ].join('\n') + '\n'
+
+  it('parses a full single-file diff into hunks with line records', () => {
+    expect(parseFileDiff(FULL)).toEqual([{
+      oldStart: 1, oldCount: 3, newStart: 1, newCount: 4,
+      lines: [
+        { type: 'context', text: 'keep' },
+        { type: 'deleted', text: 'drop this line' },
+        { type: 'added', text: 'added line' },
+        { type: 'context', text: 'keep' },
+      ],
+    }])
+  })
+
+  it('parses the shorthand hunk counts (a missing ,count means 1)', () => {
+    const hunks = parseFileDiff('@@ -5 +6 @@\n context\n')
+    expect(hunks).toEqual([{ oldStart: 5, oldCount: 1, newStart: 6, newCount: 1, lines: [{ type: 'context', text: 'context' }] }])
+  })
+
+  it('parses multiple hunks with a pure-deletion hunk (newCount 0)', () => {
+    const hunks = parseFileDiff([
+      '@@ -1,2 +1,1 @@',
+      ' a',
+      '-b',
+      '@@ -10,2 +9,0 @@',
+      '-c',
+      '-d',
+    ].join('\n') + '\n')
+    expect(hunks).toEqual([
+      { oldStart: 1, oldCount: 2, newStart: 1, newCount: 1, lines: [
+        { type: 'context', text: 'a' },
+        { type: 'deleted', text: 'b' },
+      ] },
+      { oldStart: 10, oldCount: 2, newStart: 9, newCount: 0, lines: [
+        { type: 'deleted', text: 'c' },
+        { type: 'deleted', text: 'd' },
+      ] },
+    ])
+  })
+
+  it('skips rename and mode metadata lines and the no-newline marker', () => {
+    const hunks = parseFileDiff([
+      'diff --git a/old.ts b/new.ts',
+      'similarity index 100%',
+      'rename from old.ts',
+      'rename to new.ts',
+      'index 1111111..2222222 100644',
+      '--- a/old.ts',
+      '+++ b/new.ts',
+      '@@ -1 +1 @@',
+      '-old content',
+      '+new content',
+      '\\ No newline at end of file',
+    ].join('\n') + '\n')
+    expect(hunks).toEqual([{
+      oldStart: 1, oldCount: 1, newStart: 1, newCount: 1,
+      lines: [
+        { type: 'deleted', text: 'old content' },
+        { type: 'added', text: 'new content' },
+      ],
+    }])
+  })
+
+  it('returns no hunks for empty output, binary diffs, and mode-only changes', () => {
+    expect(parseFileDiff('')).toEqual([])
+    expect(parseFileDiff('Binary files a/x.bin and b/x.bin differ\n')).toEqual([])
+    expect(parseFileDiff([
+      'diff --git a/script.sh b/script.sh',
+      'old mode 100644',
+      'new mode 100755',
+    ].join('\n') + '\n')).toEqual([])
+  })
+
+  it('rejects a malformed hunk header and a record outside a hunk', () => {
+    expect(() => parseFileDiff('@@ -nope @@\n')).toThrow(/could not parse git diff/)
+    expect(() => parseFileDiff('@@ -1 +1 @@\nbroken record\n')).toThrow(/could not parse git diff/)
   })
 })

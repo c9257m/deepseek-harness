@@ -391,6 +391,14 @@ describe('WorkspaceRuntime', () => {
     await expect(workspaces.gitStatus('/w')).resolves.toEqual(status)
     expect(api.callsOf('git.status')).toEqual([{ path: '/w' }])
 
+    const diff = {
+      kind: 'tracked' as const,
+      hunks: [{ oldStart: 1, oldCount: 1, newStart: 1, newCount: 1, lines: [{ type: 'added' as const, text: 'x' }] }],
+    }
+    api.onGitDiff = () => Promise.resolve(ok({ diff }))
+    await expect(workspaces.gitDiff('/w', '/w/a.ts')).resolves.toEqual(diff)
+    expect(api.callsOf('git.diff')).toEqual([{ path: '/w', file: '/w/a.ts' }])
+
     await expect(workspaces.gitCommit('/w', 'fix it')).resolves.toMatchObject({ subject: 'fix it' })
     expect(api.callsOf('git.commit')).toEqual([{ path: '/w', message: 'fix it' }])
 
@@ -414,6 +422,10 @@ describe('WorkspaceRuntime', () => {
     const statusFailure = workspaces.gitStatus('/w')
     await expect(statusFailure).rejects.toBeInstanceOf(GitOperationError)
     await expect(statusFailure).rejects.toMatchObject({ rpcError: { code: 'git-not-a-repository' } })
+    api.onGitDiff = () => Promise.resolve(err({ code: 'git-failed', message: 'rejected', details: {} }))
+    const diffFailure = workspaces.gitDiff('/w', '/w/a.ts')
+    await expect(diffFailure).rejects.toBeInstanceOf(GitOperationError)
+    await expect(diffFailure).rejects.toMatchObject({ rpcError: { code: 'git-failed' } })
     api.onGitStage = () => Promise.resolve(err({ code: 'git-failed', message: 'rejected', details: {} }))
     const stageFailure = workspaces.gitStage('/w', ['a.ts'])
     await expect(stageFailure).rejects.toBeInstanceOf(GitOperationError)

@@ -25,22 +25,28 @@ import type {
 // into programs that resolve the runtime shares below.
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { DirectoryListing } from '@deepseek-ai/dsh-client-runtime/client'
-import type { createFileBrowserStore } from '../stores.ts'
+import type { DirectoryListing, GitFileDiff } from '@deepseek-ai/dsh-client-runtime/client'
+import type { createFileBrowserStore, OpenFileRef } from '../stores.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
      * The git quick-action panel beneath the file tree. Declared by this
      * package as the FileTree entry's child hole (declaring is claiming); the
-     * workspace-git plugin registers the panel and receives no owner props.
+     * workspace-git plugin registers the panel and receives the tree's
+     * open-file gestures so a changed-file row opens in the shared viewer.
      */
     'sidebar.files.git': { kind: 'single'; scope: 'root'; owner: GitPanelOwnerProps }
   }
 }
 
-/** Owner share of the git-panel hole: the file tree passes nothing today. */
-export interface GitPanelOwnerProps {}
+/** Owner share of the git-panel hole: the open-file gestures the file tree owns. */
+export interface GitPanelOwnerProps {
+  /** Open a file in the shared viewer store (absolute path + base name). */
+  openFile: (file: OpenFileRef) => void
+  /** Enter file mode: the viewer takes the center column, the conversation docks right. */
+  enterFileMode: () => void
+}
 
 /** Tree-private injected share: the browse wire call and the layout transition. */
 export interface FileBrowserInjected {
@@ -62,6 +68,8 @@ export interface FileViewerInjected {
   readFile: (path: string, signal?: AbortSignal) => Promise<string>
   /** Replace a text file's whole content atomically (the auto-save write). */
   writeFile: (path: string, content: string) => Promise<void>
+  /** The working-tree-vs-HEAD diff of one workspace file, for the change marks. */
+  gitDiff: (path: string, file: string, signal?: AbortSignal) => Promise<GitFileDiff>
   /** Exit file mode: the conversation returns to the center column. */
   exitFileMode: () => void
   hooks: {

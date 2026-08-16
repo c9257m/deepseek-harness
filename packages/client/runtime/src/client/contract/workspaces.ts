@@ -7,7 +7,7 @@
  * widening what features may do to the workspaces domain.
  */
 import type {
-  DirectoryListing, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  DirectoryListing, GitBranchValue, GitCommitValue, GitFileDiff, GitOutputValue, GitStatusValue,
   SessionId, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { WorkspaceListState } from '../workspaces/service.ts'
@@ -83,6 +83,16 @@ export interface IWorkspaces {
    * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
    */
   gitStatus(path: string, signal?: AbortSignal): Promise<GitStatusValue>
+  /**
+   * The working-tree-vs-HEAD diff of one file inside the workspace, parsed
+   * into hunks so the viewer can mark added and deleted lines. `git diff
+   * HEAD` combines the staged and unstaged changes; an untracked file (or a
+   * repo with no commits) yields `kind: 'untracked'` with empty hunks.
+   * @param path - absolute workspace directory.
+   * @param file - workspace-relative or absolute file path inside `path`.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  gitDiff(path: string, file: string, signal?: AbortSignal): Promise<GitFileDiff>
   /**
    * Stage every change and commit it with the given message (the panel's
    * quick-commit semantics) and return the new commit's identity.

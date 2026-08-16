@@ -7,20 +7,27 @@
  * loaded grammars re-render on load) with an optional line-number gutter.
  * The body's right-click menu toggles line numbers and highlighting.
  *
+ * Files inside a git workspace also carry change marks from the working-tree
+ * diff (fetched per tab from the injected `gitDiff`, aligned to the current
+ * content): added lines get a green tint and deletion anchors a red tint with
+ * a "N lines deleted" tooltip; a file git does not track is tinted entirely.
+ *
  * Tabs of readable text files can be edited in place: the edit toggle swaps
  * the highlighted body for a plain-text editor, edits are **auto-saved**
  * through `writeFile` after a debounce (and flushed on tab switch or close),
  * dirty tabs carry a dot, and a failed save shows an error bar with Retry.
- * Read failures map the Host's business codes onto localized copy: too
- * large, not text, unreadable. Closing the last tab clears the store and
- * exits file mode through the injected `exitFileMode`, returning the
- * conversation to the center column.
+ * A successful save invalidates the tab's diff so the marks re-align with the
+ * new content. Read failures map the Host's business codes onto localized
+ * copy: too large, not text, unreadable. Closing the last tab clears the
+ * store and exits file mode through the injected `exitFileMode`, returning
+ * the conversation to the center column.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
   highlightLines, IconCloseFill14, IconEditOutline16, Menu, type HighlightSpan,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { GitFileDiff } from '@deepseek-ai/dsh-client-runtime/client'
 import type { FileViewerProps } from './contract/slots.ts'
 import { FileIcon } from './FileIcon.tsx'
 import { languageOf } from './file-type.ts'
@@ -28,6 +35,27 @@ import css from './FileViewer.module.css'
 
 /** Read-state of one tab's body. */
 type ReadStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+/** Per-line change marks of one open file (working tree vs HEAD). */
+type LineMarks = {
+  /** The line was added relative to the baseline. */
+  added?: boolean
+  /** Deleted lines removed immediately before this line. */
+  deletedBefore?: number
+  /** Deleted lines removed immediately after this line (an EOF deletion anchor). */
+  deletedAfter?: number
+}
+
+/** The change marks of one open file: an all-added flag plus per-line marks. */
+type FileDiffMarks = {
+  /** True when the file has no git baseline (every line is new). */
+  allAdded: boolean
+  /** Per 1-based line number, the change class of that line. */
+  lines: Readonly<Record<number, LineMarks>>
+}
+
+/** The absent-marks value (no git context, a clean file, or a failed fetch). */
+const NO_MARKS: FileDiffMarks = { allAdded: false, lines: {} }
 
 /** Idle pause after the latest keystroke before an auto-save fires. */
 const AUTOSAVE_DELAY_MS = 1000
@@ -55,9 +83,70 @@ function linesOf(content: string): string[] {
   return content.replace(/\n$/, '').split('\n')
 }
 
+/**
+ * Map a parsed per-file diff onto per-line marks aligned to the current
+ * content: each new-side record marks its line added or context, and deletions
+ * anchor on the following new-side line (or the line before the hunk when the
+ * hunk ends on deletions, e.g. an EOF removal).
+ * @param diff - the parsed working-tree-vs-HEAD diff.
+ * @returns the per-line marks.
+ */
+function marksOf(diff: GitFileDiff): FileDiffMarks {
+  if (diff.kind === 'untracked') return { allAdded: true, lines: {} }
+  const lines: Record<number, LineMarks> = {}
+  for (const hunk of diff.hunks) {
+    let newLine = hunk.newStart
+    let deleted = 0
+    for (const record of hunk.lines) {
+      if (record.type === 'deleted') {
+        deleted += 1
+        continue
+      }
+      const mark: LineMarks = { ...lines[newLine] }
+      if (record.type === 'added') mark.added = true
+      if (deleted > 0) mark.deletedBefore = deleted
+      lines[newLine] = mark
+      deleted = 0
+      newLine += 1
+    }
+    // Trailing deletions with no following new-side line in this hunk anchor
+    // on the line before the hunk; a hunk starting at the very top of the
+    // file anchors its deletions on the first line instead.
+    if (deleted > 0) {
+      const anchor = hunk.newStart > 1 ? hunk.newStart - 1 : 1
+      const mark: LineMarks = { ...lines[anchor] }
+      if (hunk.newStart > 1) mark.deletedAfter = (mark.deletedAfter ?? 0) + deleted
+      else mark.deletedBefore = (mark.deletedBefore ?? 0) + deleted
+      lines[anchor] = mark
+    }
+  }
+  return { allAdded: false, lines }
+}
+
+/** The body class of one line from its change marks, or undefined for an unchanged line. */
+function lineClass(marks: FileDiffMarks, line: number): string | undefined {
+  if (marks.allAdded) return css.lineAdded
+  const mark = marks.lines[line]
+  if (mark === undefined) return undefined
+  if (mark.added === true) return css.lineAdded
+  if ((mark.deletedBefore ?? 0) > 0 || (mark.deletedAfter ?? 0) > 0) return css.lineDeleted
+  return undefined
+}
+
+/** The localized tooltip of one line from its change marks. */
+function lineTitle(t: FileViewerProps['t'], marks: FileDiffMarks, line: number): string | undefined {
+  if (marks.allAdded) return t('viewer.diff.untracked')
+  const mark = marks.lines[line]
+  if (mark === undefined) return undefined
+  const deleted = (mark.deletedBefore ?? 0) + (mark.deletedAfter ?? 0)
+  if (mark.added === true && deleted === 0) return t('viewer.diff.added')
+  if (deleted > 0) return t('viewer.diff.deleted', { n: deleted })
+  return undefined
+}
+
 /** Render the file viewer (see module doc). */
 export function FileViewer({
-  useStore, actions, readFile, writeFile, exitFileMode, useGrammarLoaded, t,
+  useStore, actions, readFile, writeFile, gitDiff, exitFileMode, useGrammarLoaded, useSessions, t,
 }: FileViewerProps) {
   const files = useStore(s => s.files)
   const activePath = useStore(s => s.activePath)
@@ -67,6 +156,8 @@ export function FileViewer({
   // Re-render (and re-highlight) when a lazily imported grammar registers.
   useGrammarLoaded(() => 0)
   const open = files.find(candidate => candidate.path === activePath) ?? null
+  const sessions = useSessions(s => s)
+  const rootPath = sessions.current === undefined ? undefined : sessions.byId[sessions.current]?.cwd
 
   // Per-tab content cache: a file is fetched once per viewer session; the
   // active tab's body is derived from the cache. `fetched` (a ref) records the
@@ -96,6 +187,29 @@ export function FileViewer({
     })
   }, [openPath, readFile, t])
 
+  // Per-tab git change marks: fetched once per (workspace root, path) pair,
+  // keyed in a ref like the content cache, and invalidated by a successful
+  // save so the marks re-align with the new content. A diff failure (not a
+  // repo, git missing) must not disturb the read body — the marks just stay
+  // absent. The settle writes its own path's key, so a switched-away tab can
+  // never paint over the active tab.
+  const [diffMarks, setDiffMarks] = useState<Readonly<Record<string, FileDiffMarks>>>({})
+  const [diffVersion, setDiffVersion] = useState(0)
+  const diffFetched = useRef(new Set<string>())
+  const diffKey = (path: string): string => `${rootPath ?? ''}\u0000${path}`
+
+  useEffect(() => {
+    if (openPath === undefined || rootPath === undefined) return
+    const key = diffKey(openPath)
+    if (diffFetched.current.has(key)) return
+    diffFetched.current.add(key)
+    gitDiff(rootPath, openPath).then((diff) => {
+      setDiffMarks(prev => ({ ...prev, [openPath]: marksOf(diff) }))
+    }).catch(() => {
+      setDiffMarks(prev => ({ ...prev, [openPath]: NO_MARKS }))
+    })
+  }, [openPath, rootPath, gitDiff, diffVersion])
+
   const status: ReadStatus = openPath === undefined
     ? 'idle'
     : contents[openPath] !== undefined
@@ -104,6 +218,7 @@ export function FileViewer({
         ? 'error'
         : 'loading'
   const content = openPath === undefined ? null : (contents[openPath] ?? null)
+  const marks = openPath === undefined ? NO_MARKS : (diffMarks[openPath] ?? NO_MARKS)
 
   // Highlighted per-line runs, or undefined when the language is unknown or
   // its grammar is still loading (plain-text fallback; the grammar hook
@@ -141,6 +256,14 @@ export function FileViewer({
       // The saved text is now the authoritative content (a later re-read would
       // fetch it anyway); update the cache so exiting edit mode renders it.
       setContents(prev => ({ ...prev, [path]: draft }))
+      // The saved content changed the working tree: invalidate the tab's diff
+      // marks so the effect re-fetches them against the new content.
+      diffFetched.current.delete(diffKey(path))
+      setDiffMarks((prev) => {
+        if (!Object.hasOwn(prev, path)) return prev
+        return Object.fromEntries(Object.entries(prev).filter(([key]) => key !== path))
+      })
+      setDiffVersion(version => version + 1)
       setSaveErrors((prev) => {
         if (!Object.hasOwn(prev, path)) return prev
         return Object.fromEntries(Object.entries(prev).filter(([key]) => key !== path))
@@ -309,13 +432,21 @@ export function FileViewer({
           <div className={css.code} style={{ fontSize }} data-line-numbers={showLineNumbers || undefined}>
             {highlighted === undefined
               ? linesOf(content).map((line, index) => (
-                <div key={index} className={css.codeLine}>
+                <div
+                  key={index}
+                  className={clsx(css.codeLine, lineClass(marks, index + 1))}
+                  title={lineTitle(t, marks, index + 1)}
+                >
                   {showLineNumbers && <span className={css.gutter}>{index + 1}</span>}
                   <span className={css.lineText}>{line === '' ? '\u00A0' : line}</span>
                 </div>
               ))
               : highlighted.map((runs, index) => (
-                <div key={index} className={css.codeLine}>
+                <div
+                  key={index}
+                  className={clsx(css.codeLine, lineClass(marks, index + 1))}
+                  title={lineTitle(t, marks, index + 1)}
+                >
                   {showLineNumbers && <span className={css.gutter}>{index + 1}</span>}
                   <span className={css.lineText}>
                     {runs.length === 0 ? '\u00A0' : runs.map((run, runIndex) => (
