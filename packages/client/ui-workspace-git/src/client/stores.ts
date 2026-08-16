@@ -25,6 +25,8 @@ export type GitPanelState = {
   notRepo: boolean
   /** The drag-adjustable height (px) of the changed-files area; survives remounts. */
   changesHeight: number
+  /** True when the panel body is collapsed to just the header row. */
+  collapsed: boolean
 }
 
 /** Annotation twin of the actions literal below. */
@@ -37,6 +39,7 @@ type GitPanelActions = {
   setError: (draft: GitPanelState, error: string | null) => void
   setNotRepo: (draft: GitPanelState, notRepo: boolean) => void
   setChangesHeight: (draft: GitPanelState, height: number) => void
+  setCollapsed: (draft: GitPanelState, collapsed: boolean) => void
 }
 
 /** Default height (px) of the changed-files area before the user drags it. */
@@ -56,7 +59,7 @@ export function createGitPanelStore(): EngineStoreHandle<GitPanelState, GitPanel
   return defineStore({
     init: (): GitPanelState => ({
       status: null, branches: [], commitMessage: '', busy: false, output: null, error: null, notRepo: false,
-      changesHeight: DEFAULT_CHANGES_HEIGHT,
+      changesHeight: DEFAULT_CHANGES_HEIGHT, collapsed: false,
     }),
     actions: {
       setStatus: (draft, status) => { draft.status = status },
@@ -69,6 +72,7 @@ export function createGitPanelStore(): EngineStoreHandle<GitPanelState, GitPanel
       setChangesHeight: (draft, height) => {
         draft.changesHeight = Math.min(MAX_CHANGES_HEIGHT, Math.max(MIN_CHANGES_HEIGHT, height))
       },
+      setCollapsed: (draft, collapsed) => { draft.collapsed = collapsed },
     },
   })
 }

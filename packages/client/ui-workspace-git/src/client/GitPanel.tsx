@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef } from 'react'
 import clsx from 'clsx'
-import { IconRefreshOutline14, IconWarningOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14, IconChevronRightOutline14, IconRefreshOutline14, IconWarningOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { GitFileStatus } from '@deepseek-ai/dsh-client-runtime/client'
 import type { GitPanelProps } from './contract/slots.ts'
 import css from './GitPanel.module.css'
@@ -218,139 +218,156 @@ export function GitPanel({
     <div className={css.panel}>
       <div className={css.header}>
         <span className={css.title}>{t('git.title')}</span>
-        <button
-          type="button"
-          className={css.iconButton}
-          aria-label={t('git.refresh')}
-          disabled={state.busy}
-          onClick={() => { load(rootPath, { clearError: true }) }}
-        >
-          <IconRefreshOutline14 className={css.refreshIcon} />
-        </button>
+        <div className={css.headerActions}>
+          <button
+            type="button"
+            className={css.iconButton}
+            aria-label={state.collapsed ? t('git.expand') : t('git.collapse')}
+            aria-expanded={!state.collapsed}
+            onClick={() => { actions.setCollapsed(!state.collapsed) }}
+          >
+            {state.collapsed
+              ? <IconChevronRightOutline14 className={css.collapseIcon} />
+              : <IconChevronDownOutline14 className={css.collapseIcon} />}
+          </button>
+          <button
+            type="button"
+            className={css.iconButton}
+            aria-label={t('git.refresh')}
+            disabled={state.busy}
+            onClick={() => { load(rootPath, { clearError: true }) }}
+          >
+            <IconRefreshOutline14 className={css.refreshIcon} />
+          </button>
+        </div>
       </div>
 
-      <div className={css.branchRow}>
-        <span className={css.branchBadge} title={branchName}>{branchName}</span>
-        <span className={css.track}>{track}</span>
-      </div>
-
-      {status !== null && changeCount === 0 && (
-        <div className={css.cleanRow}>{t('git.clean')}</div>
-      )}
-
-      {status !== null && changeCount > 0 && (
+      {!state.collapsed && (
         <>
-          <div
-            className={css.resizeHandle}
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label={t('git.resize')}
-            onPointerDown={onResizePointerDown}
-          />
-          <div className={css.changes} style={{ height: state.changesHeight }}>
-            {(['conflicted', 'staged', 'unstaged', 'untracked'] as const).map((key) => {
-              const files = status[key]
-              if (files.length === 0) return null
-              const { label, entries } = bucket(t, key, files)
-              const paths = entries.map(entry => typeof entry === 'string' ? entry : entry.path)
-              // Untracked entries are plain paths; staged/unstaged carry status letters.
-              const perFile = (entry: GitFileStatus | string): string => typeof entry === 'string' ? entry : entry.path
-              return (
-                <div key={key} className={clsx(css.bucket, key === 'conflicted' && css.conflictBucket)}>
-                  <div className={css.bucketLabelRow}>
-                    <span className={css.bucketLabel}>{label} ({entries.length})</span>
-                    {key === 'staged' && (
-                      <button type="button" className={css.batchButton} disabled={state.busy} onClick={() => { unstage(paths) }}>
-                        {t('git.unstageAll')}
-                      </button>
-                    )}
-                    {(key === 'unstaged' || key === 'untracked') && (
-                      <button type="button" className={css.batchButton} disabled={state.busy} onClick={() => { stage(paths) }}>
-                        {t('git.stageAll')}
-                      </button>
-                    )}
-                  </div>
-                  <ul className={css.fileList}>
-                    {entries.slice(0, 20).map(entry => (
-                      <li key={perFile(entry)} className={css.fileRow} title={perFile(entry)}>
-                        <span className={css.fileName}>
-                          {typeof entry === 'string' ? baseNameOf(entry) : `${entry.status} ${baseNameOf(entry.path)}`}
-                        </span>
+          <div className={css.branchRow}>
+            <span className={css.branchBadge} title={branchName}>{branchName}</span>
+            <span className={css.track}>{track}</span>
+          </div>
+
+          {status !== null && changeCount === 0 && (
+            <div className={css.cleanRow}>{t('git.clean')}</div>
+          )}
+
+          {status !== null && changeCount > 0 && (
+            <>
+              <div
+                className={css.resizeHandle}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label={t('git.resize')}
+                onPointerDown={onResizePointerDown}
+              />
+              <div className={css.changes} style={{ height: state.changesHeight }}>
+                {(['conflicted', 'staged', 'unstaged', 'untracked'] as const).map((key) => {
+                  const files = status[key]
+                  if (files.length === 0) return null
+                  const { label, entries } = bucket(t, key, files)
+                  const paths = entries.map(entry => typeof entry === 'string' ? entry : entry.path)
+                  // Untracked entries are plain paths; staged/unstaged carry status letters.
+                  const perFile = (entry: GitFileStatus | string): string => typeof entry === 'string' ? entry : entry.path
+                  return (
+                    <div key={key} className={clsx(css.bucket, key === 'conflicted' && css.conflictBucket)}>
+                      <div className={css.bucketLabelRow}>
+                        <span className={css.bucketLabel}>{label} ({entries.length})</span>
                         {key === 'staged' && (
-                          <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { unstage([perFile(entry)]) }}>
-                            {t('git.unstage')}
+                          <button type="button" className={css.batchButton} disabled={state.busy} onClick={() => { unstage(paths) }}>
+                            {t('git.unstageAll')}
                           </button>
                         )}
                         {(key === 'unstaged' || key === 'untracked') && (
-                          <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { stage([perFile(entry)]) }}>
-                            {t('git.stage')}
+                          <button type="button" className={css.batchButton} disabled={state.busy} onClick={() => { stage(paths) }}>
+                            {t('git.stageAll')}
                           </button>
                         )}
-                      </li>
-                    ))}
-                    {entries.length > 20 && <li className={css.moreRow}>+{entries.length - 20}</li>}
-                  </ul>
-                </div>
-              )
-            })}
+                      </div>
+                      <ul className={css.fileList}>
+                        {entries.slice(0, 20).map(entry => (
+                          <li key={perFile(entry)} className={css.fileRow} title={perFile(entry)}>
+                            <span className={css.fileName}>
+                              {typeof entry === 'string' ? baseNameOf(entry) : `${entry.status} ${baseNameOf(entry.path)}`}
+                            </span>
+                            {key === 'staged' && (
+                              <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { unstage([perFile(entry)]) }}>
+                                {t('git.unstage')}
+                              </button>
+                            )}
+                            {(key === 'unstaged' || key === 'untracked') && (
+                              <button type="button" className={css.rowButton} disabled={state.busy} onClick={() => { stage([perFile(entry)]) }}>
+                                {t('git.stage')}
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                        {entries.length > 20 && <li className={css.moreRow}>+{entries.length - 20}</li>}
+                      </ul>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          <div className={css.commitRow}>
+            <input
+              className={css.commitInput}
+              type="text"
+              value={state.commitMessage}
+              placeholder={t('git.commit.placeholder')}
+              disabled={state.busy}
+              onChange={(event) => { actions.setCommitMessage(event.target.value) }}
+              onKeyDown={(event) => { if (event.key === 'Enter') commit() }}
+            />
+            <button
+              type="button"
+              className={css.commitButton}
+              disabled={state.busy || state.commitMessage.trim().length === 0}
+              onClick={commit}
+            >
+              {t('git.commit')}
+            </button>
           </div>
+
+          <div className={css.actionRow}>
+            <button type="button" className={css.actionButton} disabled={state.busy} onClick={push}>{t('git.push')}</button>
+            <button type="button" className={css.actionButton} disabled={state.busy} onClick={pull}>{t('git.pull')}</button>
+          </div>
+
+          {state.branches.length > 0 && (
+            <div className={css.branchListBlock}>
+              <div className={css.branchListLabel}>{t('git.branches')}</div>
+              <ul className={css.branchList}>
+                {state.branches.map(branch => (
+                  <li key={branch.name}>
+                    <button
+                      type="button"
+                      className={clsx(css.branchItem, branch.name === current && css.branchItemCurrent)}
+                      title={branch.name === current ? t('git.branch.current') : t('git.checkout')}
+                      disabled={state.busy || branch.name === current}
+                      onClick={() => { checkout(branch.name) }}
+                    >
+                      <span className={css.branchName}>{branch.name}</span>
+                      {branch.name === current && <span className={css.branchMark}>{t('git.branch.current')}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {state.error !== null && (
+            <div className={css.errorRow} role="alert">
+              <IconWarningOutline16 className={css.warnIcon} />
+              <span className={css.errorText}>{state.error}</span>
+            </div>
+          )}
+          {state.output !== null && <div className={css.outputRow}>{state.output}</div>}
         </>
       )}
-
-      <div className={css.commitRow}>
-        <input
-          className={css.commitInput}
-          type="text"
-          value={state.commitMessage}
-          placeholder={t('git.commit.placeholder')}
-          disabled={state.busy}
-          onChange={(event) => { actions.setCommitMessage(event.target.value) }}
-          onKeyDown={(event) => { if (event.key === 'Enter') commit() }}
-        />
-        <button
-          type="button"
-          className={css.commitButton}
-          disabled={state.busy || state.commitMessage.trim().length === 0}
-          onClick={commit}
-        >
-          {t('git.commit')}
-        </button>
-      </div>
-
-      <div className={css.actionRow}>
-        <button type="button" className={css.actionButton} disabled={state.busy} onClick={push}>{t('git.push')}</button>
-        <button type="button" className={css.actionButton} disabled={state.busy} onClick={pull}>{t('git.pull')}</button>
-      </div>
-
-      {state.branches.length > 0 && (
-        <div className={css.branchListBlock}>
-          <div className={css.branchListLabel}>{t('git.branches')}</div>
-          <ul className={css.branchList}>
-            {state.branches.map(branch => (
-              <li key={branch.name}>
-                <button
-                  type="button"
-                  className={clsx(css.branchItem, branch.name === current && css.branchItemCurrent)}
-                  title={branch.name === current ? t('git.branch.current') : t('git.checkout')}
-                  disabled={state.busy || branch.name === current}
-                  onClick={() => { checkout(branch.name) }}
-                >
-                  <span className={css.branchName}>{branch.name}</span>
-                  {branch.name === current && <span className={css.branchMark}>{t('git.branch.current')}</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {state.error !== null && (
-        <div className={css.errorRow} role="alert">
-          <IconWarningOutline16 className={css.warnIcon} />
-          <span className={css.errorText}>{state.error}</span>
-        </div>
-      )}
-      {state.output !== null && <div className={css.outputRow}>{state.output}</div>}
     </div>
   )
 }

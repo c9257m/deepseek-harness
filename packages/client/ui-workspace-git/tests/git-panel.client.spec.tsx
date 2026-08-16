@@ -127,6 +127,31 @@ describe('GitPanel', () => {
     expect(screen.queryByText('已暂存 (1)')).toBeNull()
   })
 
+  it('collapses to the header row and expands back, keeping the stored flag', async () => {
+    const { store } = mount({
+      gitStatus: vi.fn(async () => ({
+        branch: 'main', upstream: null, ahead: 0, behind: 0,
+        staged: [], unstaged: [], untracked: [], conflicted: [], clean: true,
+      })),
+    })
+    await screen.findByTitle('main')
+    // Expanded by default: the body is visible, the toggle says 收起.
+    expect(screen.getByText('工作区干净')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '收起' }).getAttribute('aria-expanded')).toBe('true')
+
+    fireEvent.click(screen.getByRole('button', { name: '收起' }))
+    expect(store.getSnapshot().collapsed).toBe(true)
+    // The body is gone; only the header toggle remains, now labelled 展开.
+    expect(screen.queryByText('工作区干净')).toBeNull()
+    expect(screen.queryByRole('button', { name: '提交' })).toBeNull()
+    const expand = screen.getByRole('button', { name: '展开' })
+    expect(expand.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(expand)
+    expect(store.getSnapshot().collapsed).toBe(false)
+    expect(await screen.findByText('工作区干净')).toBeTruthy()
+  })
+
   it('commits the draft message through the stage-all wire and reports the commit', async () => {
     const { gitCommit, store } = mount()
     await screen.findByTitle('main')

@@ -12,7 +12,7 @@ describe('createGitPanelStore', () => {
     const { store } = createGitPanelStore().create()
     expect(store.getSnapshot()).toEqual({
       status: null, branches: [], commitMessage: '', busy: false,
-      output: null, error: null, notRepo: false, changesHeight: 160,
+      output: null, error: null, notRepo: false, changesHeight: 160, collapsed: false,
     })
   })
 
@@ -29,8 +29,9 @@ describe('createGitPanelStore', () => {
     actions.setOutput('Everything up-to-date')
     actions.setError('boom')
     actions.setNotRepo(true)
+    actions.setCollapsed(true)
     expect(store.getSnapshot()).toMatchObject({
-      status, commitMessage: 'fix it', busy: true, output: 'Everything up-to-date', error: 'boom', notRepo: true,
+      status, commitMessage: 'fix it', busy: true, output: 'Everything up-to-date', error: 'boom', notRepo: true, collapsed: true,
     })
     expect(store.getSnapshot().branches).toHaveLength(1)
   })
