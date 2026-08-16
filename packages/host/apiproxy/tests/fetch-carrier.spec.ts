@@ -166,6 +166,32 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { opened: true as const } } }
       },
     },
+    git: {
+      async status(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true } } } }
+      },
+      async commit(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: request.payload.message } } } }
+      },
+      async stage(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { files: [...request.payload.files] } } }
+      },
+      async unstage(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { files: [...request.payload.files] } } }
+      },
+      async push(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { output: 'Everything up-to-date' } } }
+      },
+      async pull(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { output: 'Already up to date.' } } }
+      },
+      async branches(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { branches: [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }] } } }
+      },
+      async checkout(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { branch: request.payload.branch } } }
+      },
+    },
     workspace: {
       async list(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [] } } }

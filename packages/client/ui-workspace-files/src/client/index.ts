@@ -25,6 +25,10 @@ import { FileViewer } from './FileViewer.tsx'
 import { FontSizeRow, type FontSizeRowInjected } from './FontSizeRow.tsx'
 import { en, zh, type WorkspaceFilesKey } from './locales.ts'
 
+// The contract's exported types ride the client barrel so the slot child
+// (ui-workspace-git) pulls the SlotMap merge through one import.
+export type { FileBrowserInjected, FileViewerInjected, GitPanelOwnerProps } from './contract/slots.ts'
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Workspace file tree and file viewer copy. */
@@ -99,6 +103,12 @@ export function apply(ctx: ClientContext): void {
           name: 'sidebar.files',
           locale: NS,
           store,
+          // The git quick-action panel (ui-workspace-git) fills this child hole
+          // beneath the tree; declared here so the sidebar shell's owner
+          // contract stays with the files feature.
+          children: {
+            'sidebar.files.git': { kind: 'single', scope: 'root' },
+          },
           inject: treeInjected,
         }, FileTree)),
       ctx.slots.inject('workspace.fileViewer', () =>

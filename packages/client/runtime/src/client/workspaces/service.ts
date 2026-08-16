@@ -2,7 +2,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  DirectoryListing, IApiClient, RpcError,
+  DirectoryListing, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  IApiClient, RpcError,
   SessionId, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '../contract/store.ts'
@@ -60,6 +61,14 @@ export class FileWriteError extends Error {
   constructor(readonly rpcError: RpcError) {
     super(`file write failed: ${rpcError.code}: ${rpcError.message}`)
     this.name = 'FileWriteError'
+  }
+}
+
+/** Structured git-operation failure so the git panel can branch on Host business codes. */
+export class GitOperationError extends Error {
+  constructor(readonly rpcError: RpcError) {
+    super(`git operation failed: ${rpcError.code}: ${rpcError.message}`)
+    this.name = 'GitOperationError'
   }
 }
 
@@ -287,6 +296,104 @@ export class WorkspaceRuntime implements IWorkspaces {
     if (!response.result.ok) {
       throw new Error(`path open failed: ${response.result.error.message}`)
     }
+  }
+
+  /**
+   * The working-tree picture of a workspace directory (branch, ahead/behind,
+   * and the staged/unstaged/untracked/conflicted file buckets).
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  async gitStatus(path: string, signal?: AbortSignal): Promise<GitStatusValue> {
+    const response = await this.api.git.status({ path }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.status
+  }
+
+  /**
+   * Stage every change and commit it with the given message (the panel's
+   * quick-commit semantics) and return the new commit's identity.
+   * @param path - absolute workspace directory.
+   * @param message - the commit message (subject line).
+   */
+  async gitCommit(path: string, message: string): Promise<GitCommitValue> {
+    const response = await this.api.git.commit({ path, message })
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.commit
+  }
+
+  /**
+   * Stage the given workspace-relative paths into the index (`git add -- <paths>`).
+   * @param path - absolute workspace directory.
+   * @param files - workspace-relative paths to stage (as `gitStatus` reports them).
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   * @returns the staged paths.
+   */
+  async gitStage(path: string, files: readonly string[], signal?: AbortSignal): Promise<string[]> {
+    const response = await this.api.git.stage({ path, files: [...files] }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.files
+  }
+
+  /**
+   * Remove the given paths from the index, keeping working-tree content
+   * (`git restore --staged -- <paths>`).
+   * @param path - absolute workspace directory.
+   * @param files - workspace-relative paths to unstage.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   * @returns the unstaged paths.
+   */
+  async gitUnstage(path: string, files: readonly string[], signal?: AbortSignal): Promise<string[]> {
+    const response = await this.api.git.unstage({ path, files: [...files] }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.files
+  }
+
+  /**
+   * Upload the current branch to its upstream remote.
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   * @returns the retained git output.
+   */
+  async gitPush(path: string, signal?: AbortSignal): Promise<GitOutputValue> {
+    const response = await this.api.git.push({ path }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value
+  }
+
+  /**
+   * Download and integrate the current branch from its upstream remote.
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   * @returns the retained git output.
+   */
+  async gitPull(path: string, signal?: AbortSignal): Promise<GitOutputValue> {
+    const response = await this.api.git.pull({ path }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value
+  }
+
+  /**
+   * List the local branches of a workspace directory.
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  async gitBranches(path: string, signal?: AbortSignal): Promise<GitBranchValue[]> {
+    const response = await this.api.git.branches({ path }, signal)
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.branches
+  }
+
+  /**
+   * Switch the workspace to an existing local branch.
+   * @param path - absolute workspace directory.
+   * @param branch - the branch to check out.
+   * @returns the checked-out branch name.
+   */
+  async gitCheckout(path: string, branch: string): Promise<string> {
+    const response = await this.api.git.checkout({ path, branch })
+    if (!response.result.ok) throw new GitOperationError(response.result.error)
+    return response.result.value.branch
   }
 
   /**

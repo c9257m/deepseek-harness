@@ -29,7 +29,7 @@ const META_LINE = /^([^:#]+\.md): ([0-9a-f]{40})$/
  * other pairing rule — the three-file triplet, the consistency record, the
  * switcher, and the structural signature — applies unchanged.
  */
-export const REVERSED_PAIR_STEMS: readonly string[] = ['README']
+const REVERSED_PAIR_STEMS: readonly string[] = ['README']
 
 /** Whether a repository-relative path is the English side of a reversed pair. */
 export function isReversedPairEnglish(file: string): boolean {

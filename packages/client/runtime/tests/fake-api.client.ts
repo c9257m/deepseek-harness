@@ -2,7 +2,8 @@
 // data source on a real clock; behavior tests need per-case responses and
 // deferred-controlled timing). Streams are hand pumps: pushMux/pushHost.
 import type {
-  ClientResponse, HostFrame, IApiClient, ModelSelection, MuxFrame,
+  ClientResponse, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  HostFrame, IApiClient, ModelSelection, MuxFrame,
   RpcError, RpcReceipt, RpcRequest, RpcResponse, SessionId, SessionModels, SessionSearchItem, SkillEntry,
   WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
@@ -189,6 +190,34 @@ export class FakeApiClient implements IApiClient {
     writeFile: (payload: unknown) => this.record('host.writeFile', payload, this.onWriteFile(payload)),
     openPath: (payload: unknown) => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
+
+  readonly git: IApiClient['git'] = {
+    status: (payload: unknown) => this.record('git.status', payload, this.onGitStatus(payload)),
+    commit: (payload: unknown) => this.record('git.commit', payload, this.onGitCommit(payload)),
+    stage: (payload: unknown) => this.record('git.stage', payload, this.onGitStage(payload)),
+    unstage: (payload: unknown) => this.record('git.unstage', payload, this.onGitUnstage(payload)),
+    push: (payload: unknown) => this.record('git.push', payload, this.onGitPush(payload)),
+    pull: (payload: unknown) => this.record('git.pull', payload, this.onGitPull(payload)),
+    branches: (payload: unknown) => this.record('git.branches', payload, this.onGitBranches(payload)),
+    checkout: (payload: unknown) => this.record('git.checkout', payload, this.onGitCheckout(payload)),
+  }
+
+  onGitStatus: (payload: unknown) => Promise<RpcResponse<{ status: GitStatusValue }>> =
+    () => Promise.resolve(ok({ status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true } }))
+  onGitCommit: (payload: unknown) => Promise<RpcResponse<{ commit: GitCommitValue }>> =
+    payload => Promise.resolve(ok({ commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: (payload as { message: string }).message } }))
+  onGitStage: (payload: unknown) => Promise<RpcResponse<{ files: string[] }>> =
+    payload => Promise.resolve(ok({ files: [...(payload as { files: string[] }).files] }))
+  onGitUnstage: (payload: unknown) => Promise<RpcResponse<{ files: string[] }>> =
+    payload => Promise.resolve(ok({ files: [...(payload as { files: string[] }).files] }))
+  onGitPush: (payload: unknown) => Promise<RpcResponse<GitOutputValue>> =
+    () => Promise.resolve(ok({ output: 'Everything up-to-date' }))
+  onGitPull: (payload: unknown) => Promise<RpcResponse<GitOutputValue>> =
+    () => Promise.resolve(ok({ output: 'Already up to date.' }))
+  onGitBranches: (payload: unknown) => Promise<RpcResponse<{ branches: GitBranchValue[] }>> =
+    () => Promise.resolve(ok({ branches: [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }] }))
+  onGitCheckout: (payload: unknown) => Promise<RpcResponse<{ branch: string }>> =
+    payload => Promise.resolve(ok({ branch: (payload as { branch: string }).branch }))
 
   // The archive-set field defaults at the binding below so list stubs keep
   // the pre-archive `{ items }` shape; a stub carrying the field wins.

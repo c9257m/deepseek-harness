@@ -27,6 +27,7 @@
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
 | `@deepseek-ai/dsh-tool-fs` | `edit`、`read`、`read_image`、`write` | `ctx.tools`、`ctx.fs`、`ctx.systemPrompt`、`ctx.attachments (read_image registration)`、`ctx.llm + an image-capable route (read_image execution)` | `tool/call`、`fs/write-intent or fs/edit-intent for mutations`、`fs/observed after read presence/absence or successful file operation`、`durable attachment (read_image)`、`tool/result` | - | 先读后写／编辑策略由 `@deepseek-ai/dsh-fs-observation-policy` 添加；它是一个 `fs/*` 事件门禁插件，不会改变 schema。加载这些工具的部署按预期也应加载该插件。没有 `ctx.attachments` 时 `read_image` 不会注册；其 schema 与路由无关，执行时除非确切路由的模型声明图像输入，否则拒绝。 |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`、`grep` | `ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。 |
+| `@deepseek-ai/dsh-tool-git` | `git` | `ctx.tools`、`ctx.subprocess`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | git 是单个前台工具，其 `request` 是十二个命令的 exact-one 联合（status/diff/log/add/commit/push/pull/merge/branch/checkout/restore/init），通过 ctx.subprocess 启动系统 git 二进制 — 绝不经过 ctx.shell，绝不开后台任务。它要求 PATH 上有 git（`branch` 列表格式与 `init -b` 需要 ≥ 2.32），并固定 GIT_TERMINAL_PROMPT=0，使凭据提示快速失败而不是挂起调用；部署策略（allow/deny/ask、沙箱化）属于 tools/pre-execute 监听器，而非本工具。 |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`、`terminal_list`、`terminal_open`、`terminal_read`、`terminal_send`、`terminal_signal` | `ctx.tools`、`ctx.terminals`、`ctx.systemPrompt`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | 这 6 个终端工具需要选择启用，用于补充一次性 bash／文件系统工具。`terminal_send(run_in_background: true)` 会注册到 `ctx.jobs`；schema 不包含 TUI、具名按键序列、BEL、调整尺寸、自动启动和跨 agent 共享。 |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`、`get_goal`、`update_goal` | `ctx.tools`、`ctx.agents`、`ctx.goals`、`ctx.systemPrompt`、`a calling Agent in an authorized open turn` | `tool/call`、`goal/change for mutations`、`tool/result` | - | create、edit、pause 和 resume 要求直接来自人类的根权限；complete 和 blocked 也接受确切的当前 Goal Round。blocked 的默认下限是 3 个获准的 Round。 |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`、`schedule_delete`、`schedule_list` | `ctx.tools`、`ctx.sessions`、Session 持久化、未来创建的 live 根 Agent | `tool/call`、`schedule/change create or delete`、`tool/result` | - | 仅在选择启用的 Schedule 插件加载后创建的 live 根 Agent scope 内注册。版本 1 接受 after_seconds、显式绝对 at 和有界固定速率 every_seconds，并披露 session-local 交付；管理读取与变更必须通过共享的 Session 持久化 barrier。 |
@@ -776,6 +777,312 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 来源：[`packages/fs/tool-fs-search/src/index.ts`](../packages/fs/tool-fs-search/src/index.ts)
 
 glob 和 grep 是无条件可用的发现工具，通过 ctx.subprocess spawn 随包提供的 ripgrep 二进制文件（`@vscode/ripgrep`），并作为普通前台调用运行，绝不作为后台任务；无需在宿主机安装 `rg`，也不经过 shell 层。本目录使用 `sampleOverCapGlobResults: true`；部署必须显式选择该行为。结果超过上限时，会通过可选的 ctx.spillStore 后端保存完整的格式化列表；在共置部署中，如果后端公开本地路径，返回的定位信息可供后续读取／搜索。
+
+<a id="deepseek-aidsh-tool-git"></a>
+
+## `@deepseek-ai/dsh-tool-git`
+
+### `git`
+
+在调用会话的工作区中运行一次 git 操作并返回结构化结果。命令：`status`（工作树图景）、`diff`（未提交变更）、`log`（提交历史）、`add`（暂存）、`commit`、`push`、`pull`、`merge`、`branch`、`checkout`、`restore`、`init`。`status` 返回分支、ahead/behind 计数以及已暂存／未暂存／未跟踪／冲突文件；`diff` 返回变更文本（可选 `staged`、`stat` 摘要或限定 `path`）；`log` 返回解析后的提交（可选 `count` 或限定 `path`）；`add` 暂存 `paths`；`commit` 用 `message` 记录暂存变更（可选 `amend`）；`push` 上传提交（可选指定 `remote`/`branch`，或 `setUpstream`）；`pull` 下载并整合（可选 `rebase`）；`merge` 将 `ref` 合并进当前分支；`branch` 列出分支或 `create`/`delete` 一个；`checkout` 切换到 `branch` 或用 `createBranch` 创建并切换；`restore` 丢弃 `paths` 的工作树或 `staged` 变更；`init` 创建仓库。每个命令都直接运行系统 git 二进制 — 无 shell 层，因此无需引号 — 默认工作目录为调用会话的工作区；其他仓库请传 `workdir`。git 非零退出是携带 git stderr 的错误；`GIT_NOT_A_REPOSITORY` 表示工作目录不在 git 仓库内（先 `init` 或另选 `workdir`）。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "workdir": {
+      "type": "string",
+      "description": "Working directory for this command. Defaults to the session workspace; a relative path is resolved against it."
+    },
+    "timeoutMs": {
+      "type": "number",
+      "description": "Cooperative deadline in milliseconds for this call. Defaults to the plugin timeout; the git process is terminated when it expires."
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "status"
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "diff"
+            },
+            "staged": {
+              "type": "boolean",
+              "description": "Show staged (index) changes instead of unstaged working-tree changes."
+            },
+            "stat": {
+              "type": "boolean",
+              "description": "Show a per-file change summary instead of the full diff text."
+            },
+            "path": {
+              "type": "string",
+              "description": "Restrict the diff to one path."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "log"
+            },
+            "count": {
+              "type": "integer",
+              "description": "How many commits to return (1 to the configured cap)."
+            },
+            "path": {
+              "type": "string",
+              "description": "Restrict the history to commits touching one path."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "add"
+            },
+            "paths": {
+              "type": "array",
+              "description": "Paths to stage (directories or files; \".\" stages everything).",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "command",
+            "paths"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "commit"
+            },
+            "message": {
+              "type": "string",
+              "description": "The commit message (subject line)."
+            },
+            "amend": {
+              "type": "boolean",
+              "description": "Amend the previous commit instead of creating a new one."
+            }
+          },
+          "required": [
+            "command",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "push"
+            },
+            "remote": {
+              "type": "string",
+              "description": "Remote to push to (defaults to the branch upstream)."
+            },
+            "branch": {
+              "type": "string",
+              "description": "Branch to push (defaults to the current branch)."
+            },
+            "setUpstream": {
+              "type": "boolean",
+              "description": "Set the remote branch as the upstream of the pushed branch."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "pull"
+            },
+            "remote": {
+              "type": "string",
+              "description": "Remote to pull from (defaults to the branch upstream)."
+            },
+            "branch": {
+              "type": "string",
+              "description": "Branch to pull (defaults to the current branch)."
+            },
+            "rebase": {
+              "type": "boolean",
+              "description": "Replay local commits on top of the fetched commits instead of merging."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "merge"
+            },
+            "ref": {
+              "type": "string",
+              "description": "Branch, tag, or commit to merge into the current branch."
+            },
+            "noFastForward": {
+              "type": "boolean",
+              "description": "Create a merge commit even when the merge could fast-forward."
+            },
+            "fastForwardOnly": {
+              "type": "boolean",
+              "description": "Refuse to merge when a fast-forward is impossible."
+            }
+          },
+          "required": [
+            "command",
+            "ref"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "branch"
+            },
+            "create": {
+              "type": "string",
+              "description": "Create a branch with this name (optionally from `from`)."
+            },
+            "from": {
+              "type": "string",
+              "description": "Commit/branch the created branch starts from (defaults to HEAD)."
+            },
+            "delete": {
+              "type": "string",
+              "description": "Delete a merged branch (use `deleteForce` to delete unmerged ones)."
+            },
+            "deleteForce": {
+              "type": "boolean",
+              "description": "Delete the branch even when it is not merged."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "checkout"
+            },
+            "branch": {
+              "type": "string",
+              "description": "Switch to an existing branch."
+            },
+            "createBranch": {
+              "type": "string",
+              "description": "Create a branch with this name and switch to it."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "restore"
+            },
+            "paths": {
+              "type": "array",
+              "description": "Paths to restore (discards working-tree changes unless `staged`).",
+              "items": {
+                "type": "string"
+              }
+            },
+            "staged": {
+              "type": "boolean",
+              "description": "Unstage paths (restore the index from HEAD) instead of restoring the working tree."
+            }
+          },
+          "required": [
+            "command",
+            "paths"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "init"
+            },
+            "branch": {
+              "type": "string",
+              "description": "Initial branch name (requires a recent git; defaults to the git default)."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "request"
+  ]
+}
+```
+
+来源：[`packages/git/tool-git/src/index.ts`](../packages/git/tool-git/src/index.ts)
+
+git 是单个前台工具，其 `request` 是十二个命令的 exact-one 联合（status/diff/log/add/commit/push/pull/merge/branch/checkout/restore/init），通过 ctx.subprocess 启动系统 git 二进制 — 绝不经过 ctx.shell，绝不开后台任务。它要求 PATH 上有 git（`branch` 列表格式与 `init -b` 需要 ≥ 2.32），并固定 GIT_TERMINAL_PROMPT=0，使凭据提示快速失败而不是挂起调用；部署策略（allow/deny/ask、沙箱化）属于 tools/pre-execute 监听器，而非本工具。
+
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 

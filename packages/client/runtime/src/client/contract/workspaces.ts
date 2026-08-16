@@ -6,7 +6,10 @@
  * the concrete class. Widening this interface is the explicit act of
  * widening what features may do to the workspaces domain.
  */
-import type { DirectoryListing, SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  DirectoryListing, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  SessionId, WorkspaceId, WorkspaceView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import type { WorkspaceListState } from '../workspaces/service.ts'
 import type { ObservableSnapshot } from './store.ts'
 
@@ -73,6 +76,61 @@ export interface IWorkspaces {
    * @param path - absolute or host-resolvable path.
    */
   openPath(path: string): Promise<void>
+  /**
+   * The working-tree picture of a workspace directory (branch, ahead/behind,
+   * and the staged/unstaged/untracked/conflicted file buckets).
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  gitStatus(path: string, signal?: AbortSignal): Promise<GitStatusValue>
+  /**
+   * Stage every change and commit it with the given message (the panel's
+   * quick-commit semantics) and return the new commit's identity.
+   * @param path - absolute workspace directory.
+   * @param message - the commit message (subject line).
+   */
+  gitCommit(path: string, message: string): Promise<GitCommitValue>
+  /**
+   * Stage the given workspace-relative paths into the index (`git add -- <paths>`).
+   * @param path - absolute workspace directory.
+   * @param files - workspace-relative paths to stage (as `gitStatus` reports them).
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   * @returns the staged paths.
+   */
+  gitStage(path: string, files: readonly string[], signal?: AbortSignal): Promise<string[]>
+  /**
+   * Remove the given paths from the index, keeping working-tree content
+   * (`git restore --staged -- <paths>`).
+   * @param path - absolute workspace directory.
+   * @param files - workspace-relative paths to unstage.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   * @returns the unstaged paths.
+   */
+  gitUnstage(path: string, files: readonly string[], signal?: AbortSignal): Promise<string[]>
+  /**
+   * Upload the current branch to its upstream remote.
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  gitPush(path: string, signal?: AbortSignal): Promise<GitOutputValue>
+  /**
+   * Download and integrate the current branch from its upstream remote.
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  gitPull(path: string, signal?: AbortSignal): Promise<GitOutputValue>
+  /**
+   * List the local branches of a workspace directory.
+   * @param path - absolute workspace directory.
+   * @param signal - aborts the wire request (and the Host's git run) when the caller supersedes it.
+   */
+  gitBranches(path: string, signal?: AbortSignal): Promise<GitBranchValue[]>
+  /**
+   * Switch the workspace to an existing local branch.
+   * @param path - absolute workspace directory.
+   * @param branch - the branch to check out.
+   */
+  gitCheckout(path: string, branch: string): Promise<string>
   /**
    * Rename a Workspace.
    * @param workspaceId - target workspace.

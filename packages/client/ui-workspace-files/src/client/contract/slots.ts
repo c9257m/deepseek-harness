@@ -19,7 +19,7 @@
  * last tab clears the store and exits.
  */
 import type {
-  HostObservable, PropsLocale, PropsRuntime, PropsStore, SnapshotSelectorHook,
+  HostObservable, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore, SnapshotSelectorHook,
 } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the owner SlotMap merges (sidebar.files / workspace.fileViewer)
 // into programs that resolve the runtime shares below.
@@ -27,6 +27,20 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { DirectoryListing } from '@deepseek-ai/dsh-client-runtime/client'
 import type { createFileBrowserStore } from '../stores.ts'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /**
+     * The git quick-action panel beneath the file tree. Declared by this
+     * package as the FileTree entry's child hole (declaring is claiming); the
+     * workspace-git plugin registers the panel and receives no owner props.
+     */
+    'sidebar.files.git': { kind: 'single'; scope: 'root'; owner: GitPanelOwnerProps }
+  }
+}
+
+/** Owner share of the git-panel hole: the file tree passes nothing today. */
+export interface GitPanelOwnerProps {}
 
 /** Tree-private injected share: the browse wire call and the layout transition. */
 export interface FileBrowserInjected {
@@ -65,6 +79,7 @@ export type FileViewerHooks = {
 /** Full tree props: the sidebar owner share + the shared store + injected actions + locale. */
 export type FileTreeProps =
   PropsRuntime<'sidebar.files'>
+  & PropsRenderSlots<'sidebar.files.git'>
   & PropsStore<ReturnType<typeof createFileBrowserStore>>
   & FileBrowserInjected
   & PropsLocale<'workspace-files'>

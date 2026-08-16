@@ -237,6 +237,13 @@
 - id: tool-ask-user
   name: '@deepseek-ai/dsh-tool-ask-user'
 
+# git needs no realm: it reads the host `subprocess` service and registers into
+# the host `tools` registry, exactly like tool-fs above. The base composes it
+# globally for the single-session TUI; the Web overlay disables that global row
+# and this preset row is what a Web agent sees.
+- id: tool-git
+  name: '@deepseek-ai/dsh-tool-git'
+
 - id: tool-todo
   name: '@deepseek-ai/dsh-tool-todo'
   config:

@@ -63,9 +63,9 @@ describe('FontSizeRow', () => {
   it('disables the steppers at the bounds', () => {
     const { store } = mount()
     act(() => { store.actions.setFontSize(FONT_SIZE_MAX) })
-    expect((screen.getByLabelText('增大字体') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByLabelText('减小字体') as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByLabelText<HTMLButtonElement>('增大字体').disabled).toBe(true)
+    expect(screen.getByLabelText<HTMLButtonElement>('减小字体').disabled).toBe(false)
     act(() => { store.actions.setFontSize(FONT_SIZE_MIN) })
-    expect((screen.getByLabelText('减小字体') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByLabelText<HTMLButtonElement>('减小字体').disabled).toBe(true)
   })
 })

@@ -21,6 +21,7 @@ function scriptedApi(overrides: {
   sessions?: Partial<ApiProxy['sessions']>
   subagents?: Partial<ApiProxy['subagents']>
   host?: Partial<ApiProxy['host']>
+  git?: Partial<ApiProxy['git']>
   skills?: Partial<ApiProxy['skills']>
   agentPresets?: Partial<ApiProxy['agentPresets']>
   events?: Partial<ApiProxy['events']>
@@ -81,6 +82,17 @@ function scriptedApi(overrides: {
       writeFile: r => ok(r, { path: r.payload.path }),
       openPath: r => ok(r, { opened: true as const }),
       ...overrides.host,
+    },
+    git: {
+      status: r => ok(r, { status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true } }),
+      commit: r => ok(r, { commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: r.payload.message } }),
+      stage: r => ok(r, { files: [...r.payload.files] }),
+      unstage: r => ok(r, { files: [...r.payload.files] }),
+      push: r => ok(r, { output: 'Everything up-to-date' }),
+      pull: r => ok(r, { output: 'Already up to date.' }),
+      branches: r => ok(r, { branches: [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }] }),
+      checkout: r => ok(r, { branch: r.payload.branch }),
+      ...overrides.git,
     },
     workspace: {
       list: r => ok(r, { items: [], archivedSessionIds: [] }),

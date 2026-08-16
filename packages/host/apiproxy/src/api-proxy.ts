@@ -101,6 +101,10 @@ import { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 // Type-only: pulls the ctx.fileBrowser Context merge (the browse RPCs serve it directly).
 import type {} from '@deepseek-ai/dsh-host-file-browser'
+// Type-only: pulls the ctx.workspaceGit Context merge (the git RPCs serve it directly).
+import type {} from '@deepseek-ai/dsh-host-workspace-git'
+import { GitError } from '@deepseek-ai/dsh-tool-git'
+import { gitErrorCode } from './api/git.schema.ts'
 import {
   ApiRemoteSessionNotFound as SessionNotFound,
   ApiRemoteSubagentSessionOwnership as SubagentSessionOwnership,
@@ -631,6 +635,14 @@ async function summarizeCold(
 function directoryError(error: unknown): RpcError {
   if (error instanceof DirectoryPickerError) {
     return { code: error.code, message: error.message, details: { path: error.path } }
+  }
+  return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
+}
+
+/** Map a git-operation failure onto the stable wire error vocabulary (unknown throws stay internal). */
+function gitError(error: unknown): RpcError {
+  if (error instanceof GitError) {
+    return { code: gitErrorCode(error.code), message: error.message, details: {} }
   }
   return { code: 'internal', message: error instanceof Error ? error.message : String(error), details: {} }
 }
@@ -3018,6 +3030,93 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async openPath(request, signal) {
         return openPath(request, request.payload.path, signal)
+      },
+    },
+
+    git: {
+      async status(request, signal) {
+        try {
+          // The carrier's signal follows the caller; the service fuses its own
+          // per-op deadline on top (a stalled network operation must not pin a
+          // caller even when the transport stays healthy).
+          return ok(request, { status: await ctx.workspaceGit.status(request.payload.path, signal) })
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git status was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
+      async commit(request) {
+        try {
+          return ok(request, { commit: await ctx.workspaceGit.commit(request.payload.path, request.payload.message) })
+        } catch (error: unknown) {
+          return err(request, gitError(error))
+        }
+      },
+
+      async stage(request, signal) {
+        try {
+          return ok(request, await ctx.workspaceGit.stage(request.payload.path, request.payload.files, signal))
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git stage was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
+      async unstage(request, signal) {
+        try {
+          return ok(request, await ctx.workspaceGit.unstage(request.payload.path, request.payload.files, signal))
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git unstage was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
+      async push(request, signal) {
+        try {
+          return ok(request, await ctx.workspaceGit.push(request.payload.path, signal))
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git push was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
+      async pull(request, signal) {
+        try {
+          return ok(request, await ctx.workspaceGit.pull(request.payload.path, signal))
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git pull was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
+      async branches(request, signal) {
+        try {
+          return ok(request, { branches: await ctx.workspaceGit.branches(request.payload.path, signal) })
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'git branch listing was aborted', details: {} })
+          }
+          return err(request, gitError(error))
+        }
+      },
+
+      async checkout(request) {
+        try {
+          return ok(request, await ctx.workspaceGit.checkout(request.payload.path, request.payload.branch))
+        } catch (error: unknown) {
+          return err(request, gitError(error))
+        }
       },
     },
 

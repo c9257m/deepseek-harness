@@ -1,7 +1,8 @@
 /** Test-owned workspaces face: the renderer standard-kit observable plus recorded actions. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
-  DirectoryListing, IWorkspaces, SessionId, SnapshotStore, WorkspaceId, WorkspaceListState, WorkspaceView,
+  DirectoryListing, GitBranchValue, GitCommitValue, GitOutputValue, GitStatusValue,
+  IWorkspaces, SessionId, SnapshotStore, WorkspaceId, WorkspaceListState, WorkspaceView,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { workspaceListState } from './fixtures.ts'
 import type { Stabilizer } from './fixtures.ts'
@@ -171,6 +172,87 @@ export class TestWorkspaces implements IWorkspaces {
     this.calls.push({ method: 'writeFile', args: [path, content] })
     const stub = this.stubs.get('writeFile')
     if (stub !== undefined) await (stub(path, content) as Promise<void> | void)
+  }
+
+  /**
+   * Git working-tree picture (recorded). The default serves a clean repo on
+   * branch `main`; stub to shape a dirty tree.
+   */
+  async gitStatus(path: string, signal?: AbortSignal): Promise<GitStatusValue> {
+    this.calls.push({ method: 'gitStatus', args: [path, signal] })
+    const stub = this.stubs.get('gitStatus')
+    if (stub !== undefined) return await (stub(path, signal) as Promise<GitStatusValue>)
+    return { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true }
+  }
+
+  /**
+   * Git stage-all-and-commit (recorded). The default returns a synthetic commit.
+   */
+  async gitCommit(path: string, message: string): Promise<GitCommitValue> {
+    this.calls.push({ method: 'gitCommit', args: [path, message] })
+    const stub = this.stubs.get('gitCommit')
+    if (stub !== undefined) return await (stub(path, message) as Promise<GitCommitValue>)
+    return { hash: '0'.repeat(40), shortHash: '0000000', subject: message }
+  }
+
+  /**
+   * Git stage (recorded). The default echoes the staged paths.
+   */
+  async gitStage(path: string, files: readonly string[], signal?: AbortSignal): Promise<string[]> {
+    this.calls.push({ method: 'gitStage', args: [path, files, signal] })
+    const stub = this.stubs.get('gitStage')
+    if (stub !== undefined) return await (stub(path, files, signal) as Promise<string[]>)
+    return [...files]
+  }
+
+  /**
+   * Git unstage (recorded). The default echoes the unstaged paths.
+   */
+  async gitUnstage(path: string, files: readonly string[], signal?: AbortSignal): Promise<string[]> {
+    this.calls.push({ method: 'gitUnstage', args: [path, files, signal] })
+    const stub = this.stubs.get('gitUnstage')
+    if (stub !== undefined) return await (stub(path, files, signal) as Promise<string[]>)
+    return [...files]
+  }
+
+  /**
+   * Git push (recorded). The default resolves with an up-to-date notice.
+   */
+  async gitPush(path: string, signal?: AbortSignal): Promise<GitOutputValue> {
+    this.calls.push({ method: 'gitPush', args: [path, signal] })
+    const stub = this.stubs.get('gitPush')
+    if (stub !== undefined) return await (stub(path, signal) as Promise<GitOutputValue>)
+    return { output: 'Everything up-to-date' }
+  }
+
+  /**
+   * Git pull (recorded). The default resolves with an up-to-date notice.
+   */
+  async gitPull(path: string, signal?: AbortSignal): Promise<GitOutputValue> {
+    this.calls.push({ method: 'gitPull', args: [path, signal] })
+    const stub = this.stubs.get('gitPull')
+    if (stub !== undefined) return await (stub(path, signal) as Promise<GitOutputValue>)
+    return { output: 'Already up to date.' }
+  }
+
+  /**
+   * Git branch listing (recorded). The default lists only the current branch.
+   */
+  async gitBranches(path: string, signal?: AbortSignal): Promise<GitBranchValue[]> {
+    this.calls.push({ method: 'gitBranches', args: [path, signal] })
+    const stub = this.stubs.get('gitBranches')
+    if (stub !== undefined) return await (stub(path, signal) as Promise<GitBranchValue[]>)
+    return [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }]
+  }
+
+  /**
+   * Git branch checkout (recorded). The default resolves with the branch.
+   */
+  async gitCheckout(path: string, branch: string): Promise<string> {
+    this.calls.push({ method: 'gitCheckout', args: [path, branch] })
+    const stub = this.stubs.get('gitCheckout')
+    if (stub !== undefined) return await (stub(path, branch) as Promise<string>)
+    return branch
   }
 
   /**

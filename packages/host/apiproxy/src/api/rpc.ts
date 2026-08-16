@@ -48,6 +48,16 @@ export interface RpcErrorDetailsMap {
   'file-too-large': { path: string }
   'file-not-text': { path: string }
   'file-write-failed': { path: string }
+  /** The workspace directory is not inside a git repository (`git init` first). */
+  'git-not-a-repository': {}
+  /** The git command exited non-zero (conflict, ambiguous switch, rejected push); the message carries git's text. */
+  'git-failed': {}
+  /** The operation deadline or caller cancellation terminated the git process tree. */
+  'git-aborted': {}
+  /** The git binary could not be started (missing install or PATH). */
+  'git-launch-failed': {}
+  /** The git output exceeded the host's capture cap; the workspace is too large to summarize. */
+  'git-output-overflow': {}
   'directory-picker-unavailable': { capability: string }
   'agent-preset-read-only': { agentPreset: string; reason: string }
   'agent-preset-locked': { sessionId: SessionId; agentPreset: string }

@@ -30,20 +30,23 @@ const FILE_REFERENCE_PROMPT = fileURLToPath(new URL(
  * gaps: the `cordis_*` toolset executes model-written JavaScript that no
  * sandbox row confines, `web_fetch` chooses its own request target, and
  * `mcp_*` servers spawn outside `ctx.shell`. The composition Agent Note owns the
- * rationale and its sources.
+ * rationale and its sources. The shell tool is platform-swapped by the standard
+ * preset (`tool-bash` on POSIX, `tool-pwsh` on Windows), mirroring its
+ * `!!js process.platform` gates.
  */
 const EXPECTED_TOOLS = [
   'ask_user_question',
-  'bash',
   'create_goal',
   'edit',
   'exit_plan_mode',
   'get_goal',
+  'git',
   'interrupt_agent',
   'job_kill',
   'job_list',
   'job_output',
   'list_agents',
+  process.platform === 'win32' ? 'pwsh' : 'bash',
   'ralph',
   'read',
   'read_image',
@@ -136,23 +139,25 @@ it('lets a preset producer reach the background-job registry', async () => {
   })
   try {
     const signal = new AbortController().signal
-    // `tool-bash` is a preset row and `tasks` is a host registry; the producer
-    // resolves it with `ctx.get`, so a registry hidden behind a preset realm
-    // fails here — with every task control still listed in the catalog above.
+    // `tool-bash`/`tool-pwsh` is a preset row and `tasks` is a host registry;
+    // the producer resolves it with `ctx.get`, so a registry hidden behind a
+    // preset realm fails here — with every task control still listed in the
+    // catalog above. The shell tool is the platform-swapped preset row.
+    const isWindows = process.platform === 'win32'
+    const shell = isWindows ? 'pwsh' : 'bash'
+    const jobId = `${shell}-1`
     const started = await ctx.tools.execute({
       signal,
       callId: CallId('shipped-bash-background'),
-      name: 'bash',
-      arguments: {
-        command: 'printf SHIPPED_BACKGROUND_OK',
-        description: 'shipped background probe',
-        run_in_background: true,
-      },
+      name: shell,
+      arguments: isWindows
+        ? { command: 'Write-Output SHIPPED_BACKGROUND_OK', description: 'shipped background probe', run_in_background: true }
+        : { command: 'printf SHIPPED_BACKGROUND_OK', description: 'shipped background probe', run_in_background: true },
       agent: handle.agent,
     })
     expect({ isError: started.isError, content: started.content }).toEqual({
       isError: false,
-      content: [{ type: 'text', text: 'started background job bash-1' }],
+      content: [{ type: 'text', text: `started background job ${jobId}` }],
     })
 
     // The controller reads what the producer started: same registry, one
@@ -166,7 +171,7 @@ it('lets a preset producer reach the background-job registry', async () => {
     })
     expect(listed.isError).toBe(false)
     expect(listed.content).toEqual([
-      { type: 'text', text: expect.stringContaining('bash-1 [bash]') as unknown as string },
+      { type: 'text', text: expect.stringContaining(`${jobId} [${shell}]`) as unknown as string },
     ])
 
     // The full round trip: the output a host-plane producer wrote is collected
@@ -175,7 +180,7 @@ it('lets a preset producer reach the background-job registry', async () => {
       signal,
       callId: CallId('shipped-task-output'),
       name: 'job_output',
-      arguments: { job_id: 'bash-1', wait: true },
+      arguments: { job_id: jobId, wait: true },
       agent: handle.agent,
     })
     expect(collected.isError).toBe(false)

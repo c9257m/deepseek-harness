@@ -96,6 +96,12 @@
     - id: file-browser
       name: '@deepseek-ai/dsh-host-file-browser'
 
+    # GUI git operations (status/commit/push/pull/branches/checkout) for the
+    # workspace file tree's git quick-action panel; the api-gateway serves the
+    # git.* RPCs from this service.
+    - id: workspace-git
+      name: '@deepseek-ai/dsh-host-workspace-git'
+
     # Read-only projection of current Loader entries for trusted client RPCs.
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
@@ -231,6 +237,12 @@
     - id: ui-workspace-files
       name: '@deepseek-ai/dsh-client-ui-workspace-files'
 
+    # Workspace git quick actions: the panel beneath the sidebar file tree
+    # (sidebar.files.git) — branch/status summary, stage-all commit, push,
+    # pull, and branch switching over the host workspace-git service.
+    - id: ui-workspace-git
+      name: '@deepseek-ai/dsh-client-ui-workspace-git'
+
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the two reference sources (ui-skill / ui-subagent).
     - id: ui-input-trigger
@@ -328,6 +340,13 @@
   disabled: true
 
 - id: tool-str-replace-editor
+  disabled: true
+
+# The git tool follows the same rule: the model-facing row registers into the
+# host tools registry, so the Web overlay disables it and the standard preset
+# mounts it per agent. `git` needs no realm of its own — it only reads
+# `ctx.subprocess` and `ctx.tools`, both host-plane.
+- id: tool-git
   disabled: true
 
 # The `skill` REGISTRY stays in the host plane. It is host+per-scope layered

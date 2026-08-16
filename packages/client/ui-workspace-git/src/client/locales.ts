@@ -1,0 +1,79 @@
+/**
+ * Locale dictionaries for the git quick-action panel. Product copy is
+ * Chinese; English mirrors it.
+ */
+
+/** Chinese dictionary (the product language). */
+export const zh = {
+  'git.title': 'Git',
+  'git.detached': '游离 HEAD',
+  'git.clean': '工作区干净',
+  'git.ahead': '领先 {n}',
+  'git.behind': '落后 {n}',
+  'git.changes': '变更',
+  'git.staged': '已暂存',
+  'git.unstaged': '未暂存',
+  'git.untracked': '未跟踪',
+  'git.conflicted': '冲突',
+  'git.commit.placeholder': '提交信息…',
+  'git.commit': '提交',
+  'git.push': '推送',
+  'git.pull': '拉取',
+  'git.stage': '暂存',
+  'git.unstage': '取消暂存',
+  'git.stageAll': '全部暂存',
+  'git.unstageAll': '全部取消暂存',
+  'git.stagedN': '已暂存 {n} 个文件',
+  'git.unstagedN': '已取消暂存 {n} 个文件',
+  'git.refresh': '刷新',
+  'git.branch.placeholder': '选择分支',
+  'git.checkout': '切换',
+  'git.branches': '分支',
+  'git.branch.current': '当前分支',
+  'git.resize': '拖动调整变更列表高度',
+  'git.notRepo': '不是 git 仓库',
+  'git.busy': '处理中…',
+  'git.failed': '操作失败',
+  'git.committed': '已提交 {shortHash}',
+  'git.pushDone': '推送完成',
+  'git.pullDone': '拉取完成',
+} as const
+
+/** English mirror (equal authority; the gate checks structural parity only). */
+export const en: Record<WorkspaceGitKey, string> = {
+  'git.title': 'Git',
+  'git.detached': 'detached HEAD',
+  'git.clean': 'Working tree clean',
+  'git.ahead': 'ahead {n}',
+  'git.behind': 'behind {n}',
+  'git.changes': 'Changes',
+  'git.staged': 'Staged',
+  'git.unstaged': 'Unstaged',
+  'git.untracked': 'Untracked',
+  'git.conflicted': 'Conflicts',
+  'git.commit.placeholder': 'Commit message…',
+  'git.commit': 'Commit',
+  'git.push': 'Push',
+  'git.pull': 'Pull',
+  'git.stage': 'Stage',
+  'git.unstage': 'Unstage',
+  'git.stageAll': 'Stage all',
+  'git.unstageAll': 'Unstage all',
+  'git.stagedN': 'Staged {n} files',
+  'git.unstagedN': 'Unstaged {n} files',
+  'git.refresh': 'Refresh',
+  'git.branch.placeholder': 'Select branch',
+  'git.checkout': 'Switch',
+  'git.branches': 'Branches',
+  'git.branch.current': 'Current branch',
+  'git.resize': 'Drag to resize the changes list',
+  'git.notRepo': 'Not a git repository',
+  'git.busy': 'Working…',
+  'git.failed': 'Operation failed',
+  'git.committed': 'Committed {shortHash}',
+  'git.pushDone': 'Push finished',
+  'git.pullDone': 'Pull finished',
+}
+
+/** All panel copy keys (the locale namespace's key set). */
+export type WorkspaceGitKey = keyof typeof zh

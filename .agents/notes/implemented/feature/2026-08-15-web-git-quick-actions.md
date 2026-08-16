@@ -1,0 +1,33 @@
+# Agent Note: Web git quick actions beneath the file tree
+
+Status: implemented
+
+English | [中文](2026-08-15-web-git-quick-actions.zh.md)
+
+## Problem
+
+The web GUI's file browser let the user look at and edit workspace files, but had no git surface: an agent-produced change could be inspected in the sidebar tree and edited in the center viewer, yet committing, pushing, pulling, or switching branches required dropping to a terminal or asking the model to run git through the bash tool. The model-facing `git` tool covered agent-driven operations, but the human side of a file-browsing session had no quick actions, and nothing in the GUI answered the first question of any editing session — "what changed in this workspace, and on which branch?".
+
+## Decision
+
+Add a git quick-action panel beneath the sidebar file tree and the wire to serve it, all over existing seams:
+
+- **`@deepseek-ai/dsh-host-workspace-git` (`ctx.workspaceGit`)** — a web-host service running git in a workspace directory through `ctx.subprocess`, reusing the model-facing tool package's pure parsers (`parseStatus`/`parseLog`/`parseBranches`), error vocabulary (`GitError`), fixed invocation, and `GIT_TERMINAL_PROMPT=0` pin, so git output parsing has one home. The service declares `static inject = ['subprocess']` — a Service-class plugin reads `ctx.subprocess` only through inject, because the Loader boot gives every plugin its own fiber with a proxied context where an undeclared read throws `cannot get property "subprocess" without inject` (postmortem 0001's class-plugin variant; a loader-composition spec boots the real cordis.yml path to pin it). The git executable is resolved once through the subprocess seam's `resolveExecutable` (PATH-aware, cached for the service life) so a missing git surfaces a precise "install git / add it to PATH" `GIT_LAUNCH_FAILED` instead of a generic launch error. Methods: `status`, `stage` (`git add -- <paths>`) and `unstage` (`git restore --staged -- <paths>`) for the panel's selective-commit pair, `commit` (stage-all then commit — the panel's quick-commit semantics, distinct from the tool's staged-only commit), `push`, `pull`, `branches`, `checkout`. Each operation fuses the caller signal with an owned deadline, requires complete stdout for parsed commands (`GIT_OUTPUT_OVERFLOW` on a lossy read), and rejects relative wire paths.
+- **A `git.*` RPC domain in the gateway** — `GitApi` contract, zod schemas, fetch routes, client face, and a `git` aggregate in the ApiProxy served from `ctx.workspaceGit`, with stable wire codes (`git-not-a-repository`, `git-failed`, `git-aborted`, `git-launch-failed`, `git-output-overflow`) added to the `RpcErrorDetailsMap`.
+- **Client wiring** — the runtime `IWorkspaces` face gains `gitStatus`/`gitCommit`/`gitStage`/`gitUnstage`/`gitPush`/`gitPull`/`gitBranches`/`gitCheckout` (throwing the typed `GitOperationError`), and the fixture + test doubles implement the new methods.
+- **`@deepseek-ai/dsh-client-ui-workspace-git`** — the panel fills a new `sidebar.files.git` child hole declared by ui-workspace-files' FileTree entry and rendered beneath the tree. It shows the branch with ahead/behind facts, the changed-file buckets (staged/unstaged/untracked/conflicted) in a vertically drag-resizable list with per-file stage/unstage buttons and bucket batch actions, a stage-all commit box, push/pull/refresh actions, and every local branch as a clickable list with the current one marked, with a "不是 git 仓库" notice for non-repos. Panel state (including the dragged list height) lives in a shared store; operations are exclusive (busy flag), and a failure's error row survives the post-operation status reload.
+- **Composition** — the web-app bundle mounts the host service and the client plugin; the fixture data source serves deterministic git state for the keyless e2e lanes. The model-facing `git` tool follows the preset-plane rule of every other tool: the base composes it globally for the single-session TUI, the Web overlay disables that global row, and the standard agent preset mounts it per agent — so the shipped Web composition's global tools registry stays empty and each session's catalog carries `git` with its own realm. The assembled-catalog e2e pins the roster including `git`, with the shell tool platform-swapped (`tool-bash`/`tool-pwsh`) like the preset's own `process.platform` gates.
+
+## Alternatives considered
+
+- **Reusing the model-facing `git` tool's `runGit` directly.** Rejected: `runGit` takes a `ToolExecution` (a tool-consumer identity) and the tool package is a model-facing consumer; the host service instead imports only the pure parsers and error vocabulary, owning its own thin spawn wrapper over `ctx.subprocess`.
+- **Extending `ctx.fileBrowser` with git methods.** Rejected: file browsing and version control are different domains; the gateway already treats them as separate RPC surfaces, and mixing them would grow the filesystem-browsing service's contract with operations that belong to a git seam.
+- **A separate sidebar view tab for git.** Rejected: "under the files" is the requested placement, and a dedicated tab would split an editing session's two questions (what changed + the tree) across views; a child hole beneath the tree keeps them together.
+- **Duplicating the porcelain/format parsers in the host package.** Rejected in favor of importing the tool package's exported pure functions — one home for git output parsing, per the dependencies-over-hand-rolling rule.
+
+## Consequences
+
+- The human side of an editing session gets status, commit, push, pull, and branch switching without leaving the file view; the agent side keeps the model-facing tool. Both share one parsing vocabulary and one error-code family.
+- The commit verb is stage-all by design: the panel means "commit my workspace changes", not selective staging — a documented limitation until separate stage verbs exist.
+- The panel is unconfined git execution through `ctx.subprocess`, matching the file browser's and the git tool's posture; deployment policy for git operations stays on the permission seams.
+- The web bundle gains two packages and six RPC methods; the module graph, config catalog, client slot catalog, and translation pairs regenerate from them. The pre-existing file-browser/workspace-files registration drift (missing tsconfig path mappings and aggregate references) is fixed in the same change because the panel composes directly on the file tree.

@@ -25,6 +25,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
 | `@deepseek-ai/dsh-tool-fs` | `edit`, `read`, `read_image`, `write` | `ctx.tools`, `ctx.fs`, `ctx.systemPrompt`, `ctx.attachments (read_image registration)`, `ctx.llm + an image-capable route (read_image execution)` | `tool/call`, `fs/write-intent or fs/edit-intent for mutations`, `fs/observed after read presence/absence or successful file operation`, `durable attachment (read_image)`, `tool/result` | - | The read-before-write/edit policy is added by `@deepseek-ai/dsh-fs-observation-policy` (an `fs/*` event-gate plugin, no schema change); a deployment that loads these tools is expected to also load it. `read_image` is not registered without `ctx.attachments`; its schema is route-independent, and execution refuses unless the exact routed model declares image input. |
 | `@deepseek-ai/dsh-tool-fs-search` | `glob`, `grep` | `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments. |
+| `@deepseek-ai/dsh-tool-git` | `git` | `ctx.tools`, `ctx.subprocess`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | git is a single foreground tool whose `request` is an exact-one union of twelve commands (status/diff/log/add/commit/push/pull/merge/branch/checkout/restore/init) spawning the system git binary through ctx.subprocess — never ctx.shell, never a background job. It requires git on PATH (≥ 2.32 for the branch listing format and init -b) and pins GIT_TERMINAL_PROMPT=0 so credential prompts fail fast instead of hanging the call; deployment policy (allow/deny/ask, sandboxing) belongs to tools/pre-execute listeners, not the tool. |
 | `@deepseek-ai/dsh-tool-terminal` | `terminal_close`, `terminal_list`, `terminal_open`, `terminal_read`, `terminal_send`, `terminal_signal` | `ctx.tools`, `ctx.terminals`, `ctx.systemPrompt`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema. |
 | `@deepseek-ai/dsh-tool-goal` | `create_goal`, `get_goal`, `update_goal` | `ctx.tools`, `ctx.agents`, `ctx.goals`, `ctx.systemPrompt`, `a calling Agent in an authorized open turn` | `tool/call`, `goal/change for mutations`, `tool/result` | - | create, edit, pause, and resume require direct-human root authority; complete and blocked also accept the exact current goal round. The default blocked lower bound is three admitted rounds. |
 | `@deepseek-ai/dsh-schedule` | `schedule_create`, `schedule_delete`, `schedule_list` | `ctx.tools`, `ctx.sessions`, `Session persistence`, `a future live root Agent` | `tool/call`, `schedule/change create or delete`, `tool/result` | - | Registered only inside live root Agent scopes created after the opt-in Schedule plugin loads. Version 1 accepts after_seconds, explicit absolute at, and bounded fixed-rate every_seconds, and discloses session-local delivery; management reads and mutations require the shared Session persistence barrier. |
@@ -772,6 +773,311 @@ Search file contents with a ripgrep regular expression. Returns matching lines w
 Source: [`packages/fs/tool-fs-search/src/index.ts`](../packages/fs/tool-fs-search/src/index.ts)
 
 glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.
+
+<a id="deepseek-aidsh-tool-git"></a>
+
+## `@deepseek-ai/dsh-tool-git`
+
+### `git`
+
+Run one git operation in the calling session's workspace and return its structured result. Commands: `status` (working tree picture), `diff` (uncommitted changes), `log` (commit history), `add` (stage), `commit`, `push`, `pull`, `merge`, `branch`, `checkout`, `restore`, `init`. `status` returns the branch, ahead/behind counts, and staged/unstaged/untracked/conflicted files; `diff` returns change text (optionally `staged`, a `stat` summary, or scoped to `path`); `log` returns parsed commits (optionally `count` or scoped to `path`); `add` stages `paths`; `commit` records staged changes with `message` (optionally `amend`); `push` uploads commits (optionally to a `remote`/`branch`, or `setUpstream`); `pull` downloads and integrates (optionally `rebase`); `merge` merges `ref` into the current branch; `branch` lists branches or `create`s/`delete`s one; `checkout` switches to `branch` or creates and switches with `createBranch`; `restore` discards working-tree or `staged` changes for `paths`; `init` creates a repository. Every command runs the system git binary directly — no shell layer, so no quoting applies — with the calling session's workspace as the default working directory; pass `workdir` for another repository. A non-zero git exit is an error whose message carries git's stderr; `GIT_NOT_A_REPOSITORY` means the workdir is not inside a git repository (`init` first or choose another `workdir`).
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "workdir": {
+      "type": "string",
+      "description": "Working directory for this command. Defaults to the session workspace; a relative path is resolved against it."
+    },
+    "timeoutMs": {
+      "type": "number",
+      "description": "Cooperative deadline in milliseconds for this call. Defaults to the plugin timeout; the git process is terminated when it expires."
+    },
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "status"
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "diff"
+            },
+            "staged": {
+              "type": "boolean",
+              "description": "Show staged (index) changes instead of unstaged working-tree changes."
+            },
+            "stat": {
+              "type": "boolean",
+              "description": "Show a per-file change summary instead of the full diff text."
+            },
+            "path": {
+              "type": "string",
+              "description": "Restrict the diff to one path."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "log"
+            },
+            "count": {
+              "type": "integer",
+              "description": "How many commits to return (1 to the configured cap)."
+            },
+            "path": {
+              "type": "string",
+              "description": "Restrict the history to commits touching one path."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "add"
+            },
+            "paths": {
+              "type": "array",
+              "description": "Paths to stage (directories or files; \".\" stages everything).",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "command",
+            "paths"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "commit"
+            },
+            "message": {
+              "type": "string",
+              "description": "The commit message (subject line)."
+            },
+            "amend": {
+              "type": "boolean",
+              "description": "Amend the previous commit instead of creating a new one."
+            }
+          },
+          "required": [
+            "command",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "push"
+            },
+            "remote": {
+              "type": "string",
+              "description": "Remote to push to (defaults to the branch upstream)."
+            },
+            "branch": {
+              "type": "string",
+              "description": "Branch to push (defaults to the current branch)."
+            },
+            "setUpstream": {
+              "type": "boolean",
+              "description": "Set the remote branch as the upstream of the pushed branch."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "pull"
+            },
+            "remote": {
+              "type": "string",
+              "description": "Remote to pull from (defaults to the branch upstream)."
+            },
+            "branch": {
+              "type": "string",
+              "description": "Branch to pull (defaults to the current branch)."
+            },
+            "rebase": {
+              "type": "boolean",
+              "description": "Replay local commits on top of the fetched commits instead of merging."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "merge"
+            },
+            "ref": {
+              "type": "string",
+              "description": "Branch, tag, or commit to merge into the current branch."
+            },
+            "noFastForward": {
+              "type": "boolean",
+              "description": "Create a merge commit even when the merge could fast-forward."
+            },
+            "fastForwardOnly": {
+              "type": "boolean",
+              "description": "Refuse to merge when a fast-forward is impossible."
+            }
+          },
+          "required": [
+            "command",
+            "ref"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "branch"
+            },
+            "create": {
+              "type": "string",
+              "description": "Create a branch with this name (optionally from `from`)."
+            },
+            "from": {
+              "type": "string",
+              "description": "Commit/branch the created branch starts from (defaults to HEAD)."
+            },
+            "delete": {
+              "type": "string",
+              "description": "Delete a merged branch (use `deleteForce` to delete unmerged ones)."
+            },
+            "deleteForce": {
+              "type": "boolean",
+              "description": "Delete the branch even when it is not merged."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "checkout"
+            },
+            "branch": {
+              "type": "string",
+              "description": "Switch to an existing branch."
+            },
+            "createBranch": {
+              "type": "string",
+              "description": "Create a branch with this name and switch to it."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "restore"
+            },
+            "paths": {
+              "type": "array",
+              "description": "Paths to restore (discards working-tree changes unless `staged`).",
+              "items": {
+                "type": "string"
+              }
+            },
+            "staged": {
+              "type": "boolean",
+              "description": "Unstage paths (restore the index from HEAD) instead of restoring the working tree."
+            }
+          },
+          "required": [
+            "command",
+            "paths"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "command": {
+              "type": "string",
+              "const": "init"
+            },
+            "branch": {
+              "type": "string",
+              "description": "Initial branch name (requires a recent git; defaults to the git default)."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        }
+      ]
+    }
+  },
+  "required": [
+    "request"
+  ]
+}
+```
+
+Source: [`packages/git/tool-git/src/index.ts`](../packages/git/tool-git/src/index.ts)
+
+git is a single foreground tool whose `request` is an exact-one union of twelve commands (status/diff/log/add/commit/push/pull/merge/branch/checkout/restore/init) spawning the system git binary through ctx.subprocess — never ctx.shell, never a background job. It requires git on PATH (≥ 2.32 for the branch listing format and init -b) and pins GIT_TERMINAL_PROMPT=0 so credential prompts fail fast instead of hanging the call; deployment policy (allow/deny/ask, sandboxing) belongs to tools/pre-execute listeners, not the tool.
 
 <a id="deepseek-aidsh-tool-terminal"></a>
 

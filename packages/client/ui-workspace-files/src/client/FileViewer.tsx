@@ -300,9 +300,9 @@ export function FileViewer({
             className={css.editor}
             style={{ fontSize }}
             spellCheck={false}
-            value={openPath === undefined ? '' : (drafts[openPath] ?? content)}
+            value={drafts[openPath] ?? content}
             onChange={(event) => {
-              if (openPath !== undefined) setDraft(openPath, event.target.value)
+              setDraft(openPath, event.target.value)
             }}
           />
         ) : (
@@ -340,7 +340,7 @@ export function FileViewer({
         ]}
         onSelect={(id) => {
           const target = tabMenu?.path
-          if (target !== undefined && target !== null) {
+          if (target !== undefined) {
             if (id === 'close') closeTab(target)
             else if (id === 'close-others') actions.closeOthers(target)
             else if (id === 'close-all') closeAllTabs()

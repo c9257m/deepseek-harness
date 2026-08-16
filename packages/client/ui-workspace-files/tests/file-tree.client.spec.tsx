@@ -75,6 +75,7 @@ function mount(overrides: Partial<FileTreeProps> = {}) {
     actions: store.actions,
     listDirectory,
     enterFileMode,
+    renderSlot: () => null,
     t,
     ...overrides,
   }

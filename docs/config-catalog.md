@@ -725,7 +725,7 @@ Source: [`packages/hooks/hooks-codex/src/index.ts:44`](../packages/hooks/hooks-c
 
 ## `@deepseek-ai/dsh-host-apiproxy`
 
-Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
+Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `fileBrowser` · `workspaceGit` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
 
 ```ts config-catalog
 /** Gateway plugin configuration. */
@@ -755,19 +755,21 @@ export interface Config {
 
 Source: [`packages/host/apiproxy/src/index.ts:41`](../packages/host/apiproxy/src/index.ts)
 
-<a id="deepseek-aidsh-host-directory-picker-browse"></a>
+<a id="deepseek-aidsh-host-file-browser"></a>
 
-## `@deepseek-ai/dsh-host-directory-picker-browse`
+## `@deepseek-ai/dsh-host-file-browser`
 
 ```ts config-catalog
 /** Validated plugin configuration. */
 export interface Config {
-  /** Complete-result bound of one listing level; see {@link BrowseDirectoryPicker.Config}. */
+  /** Complete-result bound of one listing level; see {@link FileBrowser.Config}. */
   maxEntries: number
+  /** Byte cap of one `readFile` result; larger files fail with `file-too-large`. */
+  maxReadBytes: number
 }
 ```
 
-Source: [`packages/host/directory-picker-browse/src/index.ts:181`](../packages/host/directory-picker-browse/src/index.ts)
+Source: [`packages/host/file-browser/src/index.ts:198`](../packages/host/file-browser/src/index.ts)
 
 <a id="deepseek-aidsh-host-frontend-static"></a>
 
@@ -800,6 +802,26 @@ export interface Config {
 ```
 
 Source: [`packages/host/webserver/src/index.ts:45`](../packages/host/webserver/src/index.ts)
+
+<a id="deepseek-aidsh-host-workspace-git"></a>
+
+## `@deepseek-ai/dsh-host-workspace-git`
+
+Requires: `subprocess`
+
+```ts config-catalog
+/** Validated plugin configuration. */
+export interface Config {
+  /** Cap on the COMPLETE stdout one command will parse; a larger stream fails with `GIT_OUTPUT_OVERFLOW`. */
+  outputMaxBytes: number
+  /** Cooperative per-operation deadline (ms); expiry escalates to the seam's process-tree termination. */
+  timeoutMs: number
+  /** Terminate-escalation grace (ms) handed to the subprocess seam, bounded by `MAX_TIMER_DELAY_MS`. */
+  graceMs: number
+}
+```
+
+Source: [`packages/host/workspace-git/src/index.ts:66`](../packages/host/workspace-git/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 
@@ -2429,6 +2451,34 @@ export interface Config {
 
 Source: [`packages/fs/tool-fs-search/src/index.ts:73`](../packages/fs/tool-fs-search/src/index.ts)
 
+<a id="deepseek-aidsh-tool-git"></a>
+
+## `@deepseek-ai/dsh-tool-git`
+
+Requires: `tools` · `systemPrompt` · `subprocess`
+
+```ts config-catalog
+/** Plugin config: execution bounds and caps (all optional — `Config` supplies defaults). */
+export interface Config {
+  /** Cooperative per-call deadline budget in milliseconds; a call may pass a smaller `timeoutMs` argument. */
+  timeoutMs?: number
+  /** Terminate-escalation grace (ms) handed to the subprocess seam, bounded by `MAX_TIMER_DELAY_MS`. */
+  graceMs?: number
+  /** Cap on stdout a TEXT command retains inline; a larger stream spills and reports the spill path. */
+  outputMaxBytes?: number
+  /** Whole-stream cap for a TEXT command's stdout spill file. */
+  textSpillMaxBytes?: number
+  /** Cap on the COMPLETE stdout a PARSE command accepts; a larger stream fails with `GIT_OUTPUT_OVERFLOW`. */
+  parseMaxBytes?: number
+  /** Cap on the retained stderr diagnostic tail. */
+  stderrMaxBytes?: number
+  /** Cap on commits one `log` request may ask for. */
+  maxLogCommits?: number
+}
+```
+
+Source: [`packages/git/tool-git/src/index.ts:70`](../packages/git/tool-git/src/index.ts)
+
 <a id="deepseek-aidsh-tool-goal"></a>
 
 ## `@deepseek-ai/dsh-tool-goal`
@@ -3060,6 +3110,8 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-workspace-files` ([`packages/client/ui-workspace-files/src/index.ts`](../packages/client/ui-workspace-files/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-workspace-git` ([`packages/client/ui-workspace-git/src/index.ts`](../packages/client/ui-workspace-git/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
 - `@deepseek-ai/dsh-command-feedback` — requires `commands` ([`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts))
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))
@@ -3069,6 +3121,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-fs-observation-policy` ([`packages/fs/fs-observation-policy/src/index.ts`](../packages/fs/fs-observation-policy/src/index.ts))
 - `@deepseek-ai/dsh-goal-round-driver` — requires `agents` · `goals` · `sessions` ([`packages/goal/goal-round-driver/src/index.ts`](../packages/goal/goal-round-driver/src/index.ts))
 - `@deepseek-ai/dsh-host-directory-picker-auto` — requires `webServer` · `loader` ([`packages/host/directory-picker-auto/src/index.ts`](../packages/host/directory-picker-auto/src/index.ts))
+- `@deepseek-ai/dsh-host-directory-picker-browse` — requires `fileBrowser` ([`packages/host/directory-picker-browse/src/index.ts`](../packages/host/directory-picker-browse/src/index.ts))
 - `@deepseek-ai/dsh-host-directory-picker-native` ([`packages/host/directory-picker-native/src/index.ts`](../packages/host/directory-picker-native/src/index.ts))
 - `@deepseek-ai/dsh-host-plugin-inventory` — requires `loader` ([`packages/host/plugin-inventory/src/index.ts`](../packages/host/plugin-inventory/src/index.ts))
 - `@deepseek-ai/dsh-llm` ([`packages/llm/llm/src/index.ts`](../packages/llm/llm/src/index.ts))

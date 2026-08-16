@@ -26,7 +26,7 @@ export function baseNameOf(path: string): string {
 }
 
 /** Render one directory level's rows; empty levels render nothing beneath an expanded directory. */
-export function FileTree({ wide, useSessions, actions, listDirectory, enterFileMode, t }: FileTreeProps) {
+export function FileTree({ wide, useSessions, actions, listDirectory, enterFileMode, renderSlot, t }: FileTreeProps) {
   const sessions = useSessions(s => s)
   const currentId = sessions.current
   const rootPath = currentId === undefined ? undefined : sessions.byId[currentId]?.cwd
@@ -63,7 +63,6 @@ export function FileTree({ wide, useSessions, actions, listDirectory, enterFileM
     setLevelErrors({})
     if (rootPath === undefined) return
     listLevel(rootPath)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- listLevel is stable enough for a root reset (recreated per render).
   }, [rootPath])
 
   const toggleDir = (path: string): void => {
@@ -147,6 +146,9 @@ export function FileTree({ wide, useSessions, actions, listDirectory, enterFileM
           </div>
         )}
       </div>
+      {/* The git quick-action panel renders beneath the tree whenever a
+          composition registers into the declared child hole. */}
+      {renderSlot('sidebar.files.git', {})}
     </div>
   )
 }

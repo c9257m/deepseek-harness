@@ -35,6 +35,10 @@ import {
   hostPickDirectoryRequestSchema, hostReadFileRequestSchema, hostWriteFileRequestSchema,
 } from '../api/host.schema.ts'
 import {
+  gitBranchesRequestSchema, gitCheckoutRequestSchema, gitCommitRequestSchema,
+  gitPushPullRequestSchema, gitStageUnstageRequestSchema, gitStatusRequestSchema,
+} from '../api/git.schema.ts'
+import {
   workspaceArchiveSessionRequestSchema,
   workspaceCreateRequestSchema,
   workspaceDeleteRequestSchema,
@@ -111,6 +115,14 @@ const UNARY_ROUTES: UnaryRoutes = {
   'host.readFile': { schema: hostReadFileRequestSchema, invoke: (api, r, signal) => api.host.readFile(r, signal) },
   'host.writeFile': { schema: hostWriteFileRequestSchema, invoke: (api, r) => api.host.writeFile(r) },
   'host.openPath': { schema: hostOpenPathRequestSchema, invoke: (api, r, signal) => api.host.openPath(r, signal) },
+  'git.status': { schema: gitStatusRequestSchema, invoke: (api, r, signal) => api.git.status(r, signal) },
+  'git.commit': { schema: gitCommitRequestSchema, invoke: (api, r) => api.git.commit(r) },
+  'git.stage': { schema: gitStageUnstageRequestSchema, invoke: (api, r, signal) => api.git.stage(r, signal) },
+  'git.unstage': { schema: gitStageUnstageRequestSchema, invoke: (api, r, signal) => api.git.unstage(r, signal) },
+  'git.push': { schema: gitPushPullRequestSchema, invoke: (api, r, signal) => api.git.push(r, signal) },
+  'git.pull': { schema: gitPushPullRequestSchema, invoke: (api, r, signal) => api.git.pull(r, signal) },
+  'git.branches': { schema: gitBranchesRequestSchema, invoke: (api, r, signal) => api.git.branches(r, signal) },
+  'git.checkout': { schema: gitCheckoutRequestSchema, invoke: (api, r) => api.git.checkout(r) },
   'workspace.list': { schema: workspaceListRequestSchema, invoke: (api, r) => api.workspace.list(r) },
   'workspace.create': { schema: workspaceCreateRequestSchema, invoke: (api, r) => api.workspace.create(r) },
   'workspace.rename': { schema: workspaceRenameRequestSchema, invoke: (api, r) => api.workspace.rename(r) },

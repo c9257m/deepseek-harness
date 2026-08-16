@@ -506,6 +506,22 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Discriminated interaction capability: the native backend opens one OS chooser on the host display, the browse backend serves listing/creation primitives for the in-app browser; dual-face backends fill ui-workspace directory-flow slots from their browser halves (no wire advertisement).',
   },
   {
+    key: 'fileBrowser',
+    pkg: 'file-browser',
+    title: 'GUI filesystem browsing service',
+    mode: 'core',
+    consumers: ['apiproxy'],
+    note: 'Serves the browser file tree and viewer: one-level listings, child-directory creation, and bounded text reads over Node stdlib; the browse directory-picker backend delegates its capability methods here.',
+  },
+  {
+    key: 'workspaceGit',
+    pkg: 'workspace-git',
+    title: 'GUI git quick-action service',
+    mode: 'core',
+    consumers: ['apiproxy'],
+    note: 'Runs git commands in a workspace directory for the browser quick-action panel — status, stage-all-and-commit, push, pull, branch listing, and checkout — reusing the model-facing tool-git parsers and error vocabulary.',
+  },
+  {
     key: 'webServer',
     pkg: 'webserver',
     title: 'HTTP route registration',

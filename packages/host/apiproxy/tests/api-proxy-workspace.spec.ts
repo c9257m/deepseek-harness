@@ -13,6 +13,7 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerCapability } from '@deepseek-ai/dsh-host-directory-picker'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
+import { GitError } from '@deepseek-ai/dsh-tool-git'
 import type { HostFrame, WorkspaceId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { RpcRequest, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
@@ -65,6 +66,16 @@ async function harness(
     openPath?: (path: string, signal: AbortSignal) => Promise<void>
     canOpenPath?: () => boolean
     fileBrowser?: { list?: unknown; createDirectory?: unknown; readFile?: unknown }
+    workspaceGit?: {
+      status?: unknown
+      commit?: unknown
+      stage?: unknown
+      unstage?: unknown
+      push?: unknown
+      pull?: unknown
+      branches?: unknown
+      checkout?: unknown
+    }
   } = {},
 ) {
   const ctx = new Context()
@@ -106,6 +117,17 @@ async function harness(
   // Structural file-browser fake: the listing/read RPCs serve ctx.fileBrowser
   // directly, independent of the picker capability.
   ctx.provide('fileBrowser', extras.fileBrowser ?? FILE_BROWSER_STUB as never)
+  // Structural git-service fake: the git RPCs serve ctx.workspaceGit directly.
+  ctx.provide('workspaceGit', {
+    status: extras.workspaceGit?.status ?? (async () => { throw new Error('unexpected status') }),
+    commit: extras.workspaceGit?.commit ?? (async () => { throw new Error('unexpected commit') }),
+    stage: extras.workspaceGit?.stage ?? (async () => { throw new Error('unexpected stage') }),
+    unstage: extras.workspaceGit?.unstage ?? (async () => { throw new Error('unexpected unstage') }),
+    push: extras.workspaceGit?.push ?? (async () => { throw new Error('unexpected push') }),
+    pull: extras.workspaceGit?.pull ?? (async () => { throw new Error('unexpected pull') }),
+    branches: extras.workspaceGit?.branches ?? (async () => { throw new Error('unexpected branches') }),
+    checkout: extras.workspaceGit?.checkout ?? (async () => { throw new Error('unexpected checkout') }),
+  } as never)
   const api = createApiProxy(ctx, {
     defaultModelSelection: () => ({ provider: 'test', model: 'test-model' }),
     cwd: root,
@@ -643,5 +665,88 @@ describe('Host Workspace increments', () => {
       error: { code: 'session-not-found', details: { sessionId: 'session-ghost' } },
     })
     abort.abort()
+  })
+})
+
+describe('git.*', () => {
+  const CLEAN_STATUS = {
+    branch: 'main', upstream: null, ahead: 0, behind: 0,
+    staged: [], unstaged: [], untracked: [], conflicted: [], clean: true,
+  }
+
+  it('serves status, commit, push, pull, branches, and checkout through the workspace-git service', async () => {
+    const { api } = await harness(undefined, undefined, {
+      workspaceGit: {
+        status: async () => ({ ...CLEAN_STATUS }),
+        commit: async (_path: string, message: string) => ({ hash: 'h'.repeat(40), shortHash: 'hhhhhhh', subject: message }),
+        stage: async (_path: string, files: readonly string[]) => ({ files: [...files] }),
+        unstage: async (_path: string, files: readonly string[]) => ({ files: [...files] }),
+        push: async () => ({ output: 'Everything up-to-date' }),
+        pull: async () => ({ output: 'Already up to date.' }),
+        branches: async () => [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }],
+        checkout: async (_path: string, branch: string) => ({ branch }),
+      },
+    })
+    expect((await api.git.status(request({ path: '/w' }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { status: CLEAN_STATUS } })
+    expect((await api.git.commit(request({ path: '/w', message: 'fix it' }))).result)
+      .toEqual({ ok: true, value: { commit: { hash: 'h'.repeat(40), shortHash: 'hhhhhhh', subject: 'fix it' } } })
+    expect((await api.git.stage(request({ path: '/w', files: ['a.ts'] }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { files: ['a.ts'] } })
+    expect((await api.git.unstage(request({ path: '/w', files: ['a.ts'] }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { files: ['a.ts'] } })
+    expect((await api.git.push(request({ path: '/w' }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { output: 'Everything up-to-date' } })
+    expect((await api.git.pull(request({ path: '/w' }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { output: 'Already up to date.' } })
+    expect((await api.git.branches(request({ path: '/w' }), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { branches: [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }] } })
+    expect((await api.git.checkout(request({ path: '/w', branch: 'feature' }))).result)
+      .toEqual({ ok: true, value: { branch: 'feature' } })
+  })
+
+  it('maps typed git failures onto the wire error codes', async () => {
+    const { api } = await harness(undefined, undefined, {
+      workspaceGit: {
+        status: async () => { throw new GitError('not a git repository', 'GIT_NOT_A_REPOSITORY') },
+        commit: async () => { throw new GitError('git command failed (exit 128)', 'GIT_FAILED') },
+        stage: async () => { throw new GitError('git command failed (exit 128)', 'GIT_FAILED') },
+        unstage: async () => { throw new GitError('git command was aborted', 'GIT_ABORTED') },
+        push: async () => { throw new GitError('git command was aborted', 'GIT_ABORTED') },
+        pull: async () => { throw new GitError('git could not start', 'GIT_LAUNCH_FAILED') },
+        branches: async () => { throw new GitError('output overflow', 'GIT_OUTPUT_OVERFLOW') },
+        checkout: async () => { throw new Error('unexpected throw') },
+      },
+    })
+    expect((await api.git.status(request({ path: '/w' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-not-a-repository' } })
+    expect((await api.git.commit(request({ path: '/w', message: 'x' }))).result)
+      .toMatchObject({ ok: false, error: { code: 'git-failed' } })
+    expect((await api.git.stage(request({ path: '/w', files: ['x'] }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-failed' } })
+    expect((await api.git.unstage(request({ path: '/w', files: ['x'] }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-aborted' } })
+    expect((await api.git.push(request({ path: '/w' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-aborted' } })
+    expect((await api.git.pull(request({ path: '/w' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-launch-failed' } })
+    expect((await api.git.branches(request({ path: '/w' }), new AbortController().signal)).result)
+      .toMatchObject({ ok: false, error: { code: 'git-output-overflow' } })
+    expect((await api.git.checkout(request({ path: '/w', branch: 'x' }))).result)
+      .toMatchObject({ ok: false, error: { code: 'internal' } })
+  })
+
+  it('propagates a caller abort as a cancelled RPC error', async () => {
+    const { api } = await harness(undefined, undefined, {
+      workspaceGit: {
+        status: (_path: string, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => { reject(new Error('aborted')) }, { once: true })
+        }),
+      },
+    })
+    const abort = new AbortController()
+    const pending = api.git.status(request({ path: '/w' }), abort.signal)
+    abort.abort()
+    expect((await pending).result).toMatchObject({ ok: false, error: { code: 'cancelled' } })
   })
 })

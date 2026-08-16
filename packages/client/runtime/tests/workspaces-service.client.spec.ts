@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionRuntime } from '../src/client/sessions/service.ts'
 import { WorkspaceManager } from '../src/client/workspaces/manager.ts'
-import { DirectoryBrowseError, FileReadError, FileWriteError, WorkspaceCreateError, WorkspaceRuntime } from '../src/client/workspaces/service.ts'
+import { DirectoryBrowseError, FileReadError, FileWriteError, GitOperationError, WorkspaceCreateError, WorkspaceRuntime } from '../src/client/workspaces/service.ts'
 import { FakeApiClient, deferred, err, fakeRemote, ok } from './fake-api.client.ts'
 
 const sid = (id: string): SessionId => id as SessionId
@@ -377,6 +377,55 @@ describe('WorkspaceRuntime', () => {
     const failure = workspaces.writeFile('/home/u/a.txt', 'edited')
     await expect(failure).rejects.toBeInstanceOf(FileWriteError)
     await expect(failure).rejects.toMatchObject({ rpcError: { code: 'file-write-failed' } })
+  })
+
+  it('passes git operations through the wire, wrapping business failures', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const workspaces = new WorkspaceRuntime(ctx, api, new SessionRuntime(ctx, api, fakeRemote()))
+    const status = {
+      branch: 'main', upstream: 'origin/main', ahead: 1, behind: 0,
+      staged: [{ path: 'a.ts', status: 'M' }], unstaged: [], untracked: ['b.ts'], conflicted: [], clean: false,
+    }
+    api.onGitStatus = () => Promise.resolve(ok({ status }))
+    await expect(workspaces.gitStatus('/w')).resolves.toEqual(status)
+    expect(api.callsOf('git.status')).toEqual([{ path: '/w' }])
+
+    await expect(workspaces.gitCommit('/w', 'fix it')).resolves.toMatchObject({ subject: 'fix it' })
+    expect(api.callsOf('git.commit')).toEqual([{ path: '/w', message: 'fix it' }])
+
+    await expect(workspaces.gitStage('/w', ['a.ts'])).resolves.toEqual(['a.ts'])
+    expect(api.callsOf('git.stage')).toEqual([{ path: '/w', files: ['a.ts'] }])
+    await expect(workspaces.gitUnstage('/w', ['a.ts'])).resolves.toEqual(['a.ts'])
+    expect(api.callsOf('git.unstage')).toEqual([{ path: '/w', files: ['a.ts'] }])
+
+    await expect(workspaces.gitPush('/w')).resolves.toMatchObject({ output: 'Everything up-to-date' })
+    expect(api.callsOf('git.push')).toEqual([{ path: '/w' }])
+    await expect(workspaces.gitPull('/w')).resolves.toMatchObject({ output: 'Already up to date.' })
+    expect(api.callsOf('git.pull')).toEqual([{ path: '/w' }])
+
+    await expect(workspaces.gitBranches('/w')).resolves.toMatchObject([{ name: 'main', current: true }])
+    expect(api.callsOf('git.branches')).toEqual([{ path: '/w' }])
+
+    await expect(workspaces.gitCheckout('/w', 'feature')).resolves.toBe('feature')
+    expect(api.callsOf('git.checkout')).toEqual([{ path: '/w', branch: 'feature' }])
+
+    api.onGitStatus = () => Promise.resolve(err({ code: 'git-not-a-repository', message: 'not a repo', details: {} }))
+    const statusFailure = workspaces.gitStatus('/w')
+    await expect(statusFailure).rejects.toBeInstanceOf(GitOperationError)
+    await expect(statusFailure).rejects.toMatchObject({ rpcError: { code: 'git-not-a-repository' } })
+    api.onGitStage = () => Promise.resolve(err({ code: 'git-failed', message: 'rejected', details: {} }))
+    const stageFailure = workspaces.gitStage('/w', ['a.ts'])
+    await expect(stageFailure).rejects.toBeInstanceOf(GitOperationError)
+    await expect(stageFailure).rejects.toMatchObject({ rpcError: { code: 'git-failed' } })
+    api.onGitUnstage = () => Promise.resolve(err({ code: 'git-failed', message: 'rejected', details: {} }))
+    const unstageFailure = workspaces.gitUnstage('/w', ['a.ts'])
+    await expect(unstageFailure).rejects.toBeInstanceOf(GitOperationError)
+    await expect(unstageFailure).rejects.toMatchObject({ rpcError: { code: 'git-failed' } })
+    api.onGitPush = () => Promise.resolve(err({ code: 'git-failed', message: 'rejected', details: {} }))
+    const pushFailure = workspaces.gitPush('/w')
+    await expect(pushFailure).rejects.toBeInstanceOf(GitOperationError)
+    await expect(pushFailure).rejects.toMatchObject({ rpcError: { code: 'git-failed' } })
   })
 
   it('opens a filesystem path through the host without local state', async () => {

@@ -2602,6 +2602,39 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       },
       openPath: request => ok(request, { opened: true as const }),
     },
+    git: {
+      // Deterministic fixture git state for the sidebar panel: the session
+      // workspace is a small dirty repo; every other path is not a repo.
+      status: (request) => {
+        if (request.payload.path !== `${FIXTURE_HOME}/Documents/project`) {
+          return err(request, { code: 'git-not-a-repository', message: 'not a git repository', details: {} })
+        }
+        return ok(request, {
+          status: {
+            branch: 'main', upstream: 'origin/main', ahead: 1, behind: 0,
+            staged: [{ path: 'notes.md', status: 'M' }],
+            unstaged: [],
+            untracked: ['draft.txt'],
+            conflicted: [],
+            clean: false,
+          },
+        })
+      },
+      commit: request => ok(request, {
+        commit: { hash: 'f'.repeat(40), shortHash: 'fffffff', subject: request.payload.message },
+      }),
+      stage: request => ok(request, { files: [...request.payload.files] }),
+      unstage: request => ok(request, { files: [...request.payload.files] }),
+      push: request => ok(request, { output: 'Everything up-to-date' }),
+      pull: request => ok(request, { output: 'Already up to date.' }),
+      branches: request => ok(request, {
+        branches: [
+          { name: 'main', current: true, upstream: 'origin/main', ahead: 1, behind: 0, gone: false },
+          { name: 'feature', current: false, upstream: null, ahead: 0, behind: 0, gone: false },
+        ],
+      }),
+      checkout: request => ok(request, { branch: request.payload.branch }),
+    },
     workspace: {
       list: request => ok(request, {
         items: workspaces.map(w => ({ ...w })),
@@ -3139,6 +3172,14 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.readFile': return this.api.host.readFile(request, new AbortController().signal)
       case 'host.writeFile': return this.api.host.writeFile(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
+      case 'git.status': return this.api.git.status(request, new AbortController().signal)
+      case 'git.commit': return this.api.git.commit(request)
+      case 'git.stage': return this.api.git.stage(request, new AbortController().signal)
+      case 'git.unstage': return this.api.git.unstage(request, new AbortController().signal)
+      case 'git.push': return this.api.git.push(request, new AbortController().signal)
+      case 'git.pull': return this.api.git.pull(request, new AbortController().signal)
+      case 'git.branches': return this.api.git.branches(request, new AbortController().signal)
+      case 'git.checkout': return this.api.git.checkout(request)
       case 'workspace.list': return this.api.workspace.list(request)
       case 'workspace.create': return this.api.workspace.create(request)
       case 'workspace.rename': return this.api.workspace.rename(request)

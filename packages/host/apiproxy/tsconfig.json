@@ -96,6 +96,12 @@
       "path": "../file-browser"
     },
     {
+      "path": "../workspace-git"
+    },
+    {
+      "path": "../../git/tool-git"
+    },
+    {
       "path": "../../extensions/cordis-host-runner"
     },
     {

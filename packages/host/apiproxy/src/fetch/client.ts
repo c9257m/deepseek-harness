@@ -19,6 +19,10 @@ import {
   hostReadFileValueSchema, hostWriteFileValueSchema,
 } from '../api/host.schema.ts'
 import {
+  gitBranchesValueSchema, gitCheckoutValueSchema, gitCommitValueSchema,
+  gitFilesValueSchema, gitOutputValueSchema, gitStatusValueSchema,
+} from '../api/git.schema.ts'
+import {
   sessionCancelValueSchema,
   sessionAttachmentValueSchema,
   sessionCreateValueSchema,
@@ -115,6 +119,16 @@ export interface IApiClient {
     writeFile(payload: RequestPayload<'host.writeFile'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.writeFile'>>>
     openPath(payload: RequestPayload<'host.openPath'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'host.openPath'>>>
   }
+  git: {
+    status(payload: RequestPayload<'git.status'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.status'>>>
+    commit(payload: RequestPayload<'git.commit'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.commit'>>>
+    stage(payload: RequestPayload<'git.stage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.stage'>>>
+    unstage(payload: RequestPayload<'git.unstage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.unstage'>>>
+    push(payload: RequestPayload<'git.push'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.push'>>>
+    pull(payload: RequestPayload<'git.pull'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.pull'>>>
+    branches(payload: RequestPayload<'git.branches'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.branches'>>>
+    checkout(payload: RequestPayload<'git.checkout'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'git.checkout'>>>
+  }
   workspace: {
     list(payload: RequestPayload<'workspace.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.list'>>>
     create(payload: RequestPayload<'workspace.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.create'>>>
@@ -196,6 +210,14 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.readFile': hostReadFileValueSchema,
   'host.writeFile': hostWriteFileValueSchema,
   'host.openPath': hostOpenPathValueSchema,
+  'git.status': gitStatusValueSchema,
+  'git.commit': gitCommitValueSchema,
+  'git.stage': gitFilesValueSchema,
+  'git.unstage': gitFilesValueSchema,
+  'git.push': gitOutputValueSchema,
+  'git.pull': gitOutputValueSchema,
+  'git.branches': gitBranchesValueSchema,
+  'git.checkout': gitCheckoutValueSchema,
   'workspace.list': workspaceListValueSchema,
   'workspace.create': workspaceCreateValueSchema,
   'workspace.rename': workspaceRenameValueSchema,
@@ -448,6 +470,20 @@ export abstract class AbstractApiClient implements IApiClient {
     readFile: (payload, signal) => this.callUnary('host.readFile', payload, signal),
     writeFile: (payload, signal) => this.callUnary('host.writeFile', payload, signal),
     openPath: (payload, signal) => this.callUnary('host.openPath', payload, signal),
+  }
+
+  readonly git: IApiClient['git'] = {
+    status: (payload, signal) => this.callUnary('git.status', payload, signal),
+    commit: (payload, signal) => this.callUnary('git.commit', payload, signal),
+    stage: (payload, signal) => this.callUnary('git.stage', payload, signal),
+    unstage: (payload, signal) => this.callUnary('git.unstage', payload, signal),
+    // Network operations may legitimately outlast the normal unary deadline;
+    // the host service owns its own per-op deadline. Caller/connection aborts
+    // remain.
+    push: (payload, signal) => this.callUnary('git.push', payload, signal, 'caller-signal-only'),
+    pull: (payload, signal) => this.callUnary('git.pull', payload, signal, 'caller-signal-only'),
+    branches: (payload, signal) => this.callUnary('git.branches', payload, signal),
+    checkout: (payload, signal) => this.callUnary('git.checkout', payload, signal),
   }
 
   readonly workspace: IApiClient['workspace'] = {

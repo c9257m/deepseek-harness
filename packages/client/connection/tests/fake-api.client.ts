@@ -156,6 +156,29 @@ export class FakeApiClient implements IApiClient {
     openPath: payload => this.record('host.openPath', payload, this.onOpenPath(payload)),
   }
 
+  readonly git: IApiClient['git'] = {
+    status: payload => this.record('git.status', payload, Promise.resolve(ok({
+      status: { branch: 'main', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [], conflicted: [], clean: true },
+    }))),
+    commit: payload => this.record('git.commit', payload, Promise.resolve(ok({
+      commit: { hash: '0'.repeat(40), shortHash: '0000000', subject: (payload as { message: string }).message },
+    }))),
+    stage: payload => this.record('git.stage', payload, Promise.resolve(ok({
+      files: [...(payload as { files: string[] }).files],
+    }))),
+    unstage: payload => this.record('git.unstage', payload, Promise.resolve(ok({
+      files: [...(payload as { files: string[] }).files],
+    }))),
+    push: payload => this.record('git.push', payload, Promise.resolve(ok({ output: 'Everything up-to-date' }))),
+    pull: payload => this.record('git.pull', payload, Promise.resolve(ok({ output: 'Already up to date.' }))),
+    branches: payload => this.record('git.branches', payload, Promise.resolve(ok({
+      branches: [{ name: 'main', current: true, upstream: null, ahead: 0, behind: 0, gone: false }],
+    }))),
+    checkout: payload => this.record('git.checkout', payload, Promise.resolve(ok({
+      branch: (payload as { branch: string }).branch,
+    }))),
+  }
+
   readonly workspace: IApiClient['workspace'] = {
     list: (payload: unknown) => this.record('workspace.list', payload, Promise.resolve(ok({ items: [], archivedSessionIds: [] }))),
     create: (payload: unknown) => this.record('workspace.create', payload, Promise.resolve(ok({

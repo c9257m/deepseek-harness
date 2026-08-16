@@ -147,7 +147,147 @@ Abstract directory-picking service. Subclass, implement `capability()`, and load
 abstract capability(): DirectoryPickerCapability
 ```
 
-Source: [`packages/host/directory-picker/src/index.ts:131`](../../packages/host/directory-picker/src/index.ts)
+Source: [`packages/host/directory-picker/src/index.ts:158`](../../packages/host/directory-picker/src/index.ts)
+
+<a id="ctxfilebrowser--filebrowser"></a>
+
+### `ctx.fileBrowser` — `FileBrowser`
+
+The filesystem-browsing service implementation (stable per service life).
+
+```ts cordis-catalog
+/**
+ * List one directory level (files and directories), bounded by
+ * {@link Config.maxEntries}.
+ * @param path - absolute directory to list; absent lists the home directory.
+ * @param signal - caller lifetime; abort stops the scan (a stalled network
+ * directory must not outlive a disconnected caller) and rejects with the
+ * abort reason.
+ * @returns the level's listing with ancestry; a cut level reports `truncated`.
+ * @throws {DirectoryPickerError} `directory-unreadable` when the target is not fully
+ * qualified (a wire value must never resolve against the host cwd or, on
+ * Windows, its current drive) or cannot be listed.
+ */
+async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
+
+/**
+ * Create one child directory under an existing parent.
+ * @param path - absolute existing parent directory.
+ * @param name - single non-blank path segment (no separators, not `.`/`..`).
+ * @returns the created directory's absolute path.
+ * @throws {DirectoryPickerError} `directory-exists` for an existing child,
+ * `directory-create-failed` for a parent that is not fully qualified or any other failure.
+ */
+async createDirectory(path: string, name: string): Promise<string>
+
+/**
+ * Read a regular text file, bounded to {@link Config.maxReadBytes}.
+ * @param path - absolute file to read.
+ * @param signal - caller lifetime; abort rejects with the abort reason.
+ * @returns the decoded UTF-8 content of the whole file.
+ * @throws {DirectoryPickerError} `file-unreadable` when the path is not
+ * fully qualified or cannot be read as a regular file,
+ * `file-too-large` when the file exceeds the backend's byte cap, and
+ * `file-not-text` when the content is not valid text (binary rejection).
+ */
+async readFile(path: string, signal?: AbortSignal): Promise<string>
+
+/**
+ * Replace a text file's whole content atomically (temp sibling + rename,
+ * via the atomic-write utility), so readers observe either the old or the
+ * new complete content and a failed write leaves the target untouched.
+ * @param path - absolute file to write.
+ * @param content - the complete next file content.
+ * @throws {DirectoryPickerError} `file-write-failed` when the path is not
+ * fully qualified or the replacement fails for any filesystem reason.
+ */
+async writeFile(path: string, content: string): Promise<void>
+```
+
+Source: [`packages/host/file-browser/src/index.ts:208`](../../packages/host/file-browser/src/index.ts)
+
+<a id="ctxworkspacegit--workspacegit"></a>
+
+### `ctx.workspaceGit` — `WorkspaceGit`
+
+The GUI git-operations service implementation (stable per service life). Every method runs the system git binary in `path` and fails with a typed GitError (`GIT_NOT_A_REPOSITORY` for a non-repo directory, `GIT_ABORTED` for the deadline or caller signal, `GIT_LAUNCH_FAILED` for a failed spawn, `GIT_OUTPUT_OVERFLOW` for a stdout cap breach, `GIT_FAILED` for any other non-zero exit).
+
+```ts cordis-catalog
+/**
+ * The working-tree picture of a workspace directory.
+ * @param path - fully-qualified workspace directory.
+ * @param signal - caller lifetime.
+ * @returns the parsed status (branch, ahead/behind, file buckets, clean flag).
+ */
+async status(path: string, signal?: AbortSignal): Promise<GitStatusValue>
+
+/**
+ * Stage every change and commit it with the given message — the quick-action
+ * semantics of the GUI panel ("commit my workspace changes"), unlike the
+ * model-facing tool's staged-only commit.
+ * @param path - fully-qualified workspace directory.
+ * @param message - the commit message (subject line).
+ * @param signal - caller lifetime.
+ * @returns the new commit's identity.
+ */
+async commit(path: string, message: string, signal?: AbortSignal): Promise<GitCommitValue>
+
+/**
+ * Stage the given working-tree paths into the index (`git add -- <paths>`).
+ * Paths are workspace-relative, exactly as `status` reports them, so the
+ * panel can round-trip a row back into the index.
+ * @param path - fully-qualified workspace directory.
+ * @param files - workspace-relative paths to stage (non-empty).
+ * @param signal - caller lifetime.
+ * @returns the staged paths.
+ */
+async stage(path: string, files: readonly string[], signal?: AbortSignal): Promise<{ files: string[] }>
+
+/**
+ * Remove the given paths from the index, keeping the working-tree content
+ * (`git restore --staged -- <paths>`).
+ * @param path - fully-qualified workspace directory.
+ * @param files - workspace-relative paths to unstage (non-empty).
+ * @param signal - caller lifetime.
+ * @returns the unstaged paths.
+ */
+async unstage(path: string, files: readonly string[], signal?: AbortSignal): Promise<{ files: string[] }>
+
+/**
+ * Upload the current branch to its upstream remote.
+ * @param path - fully-qualified workspace directory.
+ * @param signal - caller lifetime.
+ * @returns the retained git output (progress and confirmation).
+ */
+async push(path: string, signal?: AbortSignal): Promise<GitOutputValue>
+
+/**
+ * Download and integrate the current branch from its upstream remote.
+ * @param path - fully-qualified workspace directory.
+ * @param signal - caller lifetime.
+ * @returns the retained git output (fast-forward summary and file stats).
+ */
+async pull(path: string, signal?: AbortSignal): Promise<GitOutputValue>
+
+/**
+ * List the local branches of a workspace directory.
+ * @param path - fully-qualified workspace directory.
+ * @param signal - caller lifetime.
+ * @returns the parsed branches (current, upstream, ahead/behind, `[gone]`).
+ */
+async branches(path: string, signal?: AbortSignal): Promise<GitBranchValue[]>
+
+/**
+ * Switch the workspace to an existing local branch.
+ * @param path - fully-qualified workspace directory.
+ * @param branch - the branch to check out.
+ * @param signal - caller lifetime.
+ * @returns the checked-out branch name.
+ */
+async checkout(path: string, branch: string, signal?: AbortSignal): Promise<{ branch: string }>
+```
+
+Source: [`packages/host/workspace-git/src/index.ts:153`](../../packages/host/workspace-git/src/index.ts)
 
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 

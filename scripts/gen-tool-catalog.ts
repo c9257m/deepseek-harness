@@ -47,6 +47,7 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
+import * as ToolGit from '@deepseek-ai/dsh-tool-git'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
@@ -327,6 +328,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'glob and grep are unconditional discovery tools that spawn the packaged ripgrep binary (`@vscode/ripgrep`) through ctx.subprocess as ordinary foreground calls (never background jobs) — no host `rg` install and no shell layer. The catalog uses `sampleOverCapGlobResults: true`; deployments must choose that behavior explicitly. Capped results save the complete formatted list through the optional ctx.spillStore backend; returned locators are follow-up-readable/searchable when the backend exposes local paths in co-located deployments.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-git',
+    dir: 'tool-git',
+    source: 'packages/git/tool-git/src/index.ts',
+    requires: ['ctx.tools', 'ctx.subprocess', 'ctx.systemPrompt'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // The tool spawns the SYSTEM git binary through ctx.subprocess;
+      // registration itself never spawns, so the real local service is inert
+      // here. The `git` request schema is config-independent.
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(ToolGit)
+    },
+    note:
+      'git is a single foreground tool whose `request` is an exact-one union of twelve commands (status/diff/log/add/commit/push/pull/merge/branch/checkout/restore/init) spawning the system git binary through ctx.subprocess — never ctx.shell, never a background job. It requires git on PATH (≥ 2.32 for the branch listing format and init -b) and pins GIT_TERMINAL_PROMPT=0 so credential prompts fail fast instead of hanging the call; deployment policy (allow/deny/ask, sandboxing) belongs to tools/pre-execute listeners, not the tool.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-terminal',
